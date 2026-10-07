@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Investigação de Acidentes — IP VIDAS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde:#07583C; --verde-2:#0A6B4A; --lima:#B3DD64; --lima-suave:#EAF5D6; --ambar:#FDB952; --vermelho:#DF4636;
+  --fundo:#F2F5F0; --papel:#FFFFFF; --tinta:#1C2B22; --muted:#5D6F64; --linha:#D5E3CC;
+  --erro:#B42318; --erro-bg:#FCE8E6; --aviso:#9A6B00; --aviso-bg:#FFF4DB; --cinza-bg:#EEF1EE;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;background:var(--fundo);color:var(--tinta);font-size:15px;line-height:1.5}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--lima);outline-offset:2px}
+.hidden{display:none !important}
+
+header.topo{background:var(--verde);color:#fff;border-bottom:4px solid var(--lima)}
+.topo-inner{max-width:1240px;margin:0 auto;padding:16px 24px;display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap}
+.topo h1{margin:0;font-size:22px;line-height:1.2}
+.topo .sub{color:var(--lima);font-size:14px;font-weight:500}
+.topo .filtros{margin-left:auto;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.topo label{display:block;font-size:12px;color:#CFE6D6;margin-bottom:2px}
+.topo select{background:#0B6546;border:1px solid #2F7F60;color:#fff;border-radius:6px;padding:7px 10px;min-width:140px}
+.usuario-topo{font-size:13px;color:#CFE6D6;align-self:center}
+.usuario-topo b{color:#fff}
+.usuario-topo button{background:none;border:1px solid #2F7F60;color:#fff;border-radius:6px;padding:2px 10px;margin-left:8px;cursor:pointer;font-size:12px}
+
+main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
+.abas{display:flex;gap:4px;border-bottom:1px solid var(--linha);margin-bottom:18px;flex-wrap:wrap}
+.aba{padding:8px 14px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.aba.ativa{color:var(--verde);border-bottom-color:var(--verde)}
+
+.regua{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;margin-bottom:20px;overflow-x:auto}
+.mes{background:var(--papel);border:1px solid var(--linha);border-radius:6px;padding:8px 6px 10px;cursor:pointer;text-align:center;min-width:64px}
+.mes:hover{border-color:var(--verde)}
+.mes .nome{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--verde)}
+.mes .ano{font-size:11px;color:var(--muted);line-height:1}
+.mes .conta{font-size:12px;font-weight:600;margin-top:4px}
+.mes.atual{box-shadow:inset 0 -3px 0 var(--lima)}
+.mes.sel{background:var(--verde);border-color:var(--verde);color:#fff}
+.mes.sel .nome{color:var(--lima)} .mes.sel .ano{color:#CFE6D6}
+
+.barra{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.barra h2{margin:0;font-size:20px}
+.barra .resumo{color:var(--muted);font-size:14px}
+.barra .dir{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:6px;border:1px solid transparent;cursor:pointer;font-weight:600;background:none}
+.btn-primario{background:var(--verde);color:#fff}
+.btn-primario:hover{background:var(--verde-2)}
+.btn-primario:disabled{background:#8FA99A;cursor:not-allowed}
+.btn-sec{background:#fff;color:var(--verde);border-color:var(--linha)}
+.btn-sec:hover{border-color:var(--verde)}
+.btn-link{color:var(--verde);padding:4px 6px;font-size:13px}
+.chk{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+
+.lista{display:flex;flex-direction:column;gap:10px}
+.oc{background:var(--papel);border:1px solid var(--linha);border-left:5px solid var(--ambar);border-radius:6px;padding:12px 16px}
+.oc.ok{border-left-color:var(--verde)} .oc.nok{border-left-color:var(--vermelho)} .oc.fora{border-left-color:#C9D3CC;opacity:.75}
+.oc .l1{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.oc h4{margin:0;font-size:15px}
+.oc .rel{font-size:13px;color:var(--muted);margin:4px 0 8px}
+.oc .l2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+.oc select{padding:4px 8px;border:1px solid var(--linha);border-radius:6px;font-size:13px;max-width:330px}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+.t-ok{background:var(--lima-suave);color:var(--verde)} .t-nok{background:var(--erro-bg);color:var(--erro)} .t-pend{background:var(--aviso-bg);color:var(--aviso)} .t-neutro{background:var(--cinza-bg);color:var(--muted)}
+
+.tabela{overflow-x:auto;border:1px solid var(--linha);border-radius:6px;background:#fff}
+.tabela table{border-collapse:collapse;width:100%;font-size:13px}
+.tabela th,.tabela td{padding:7px 9px;border-bottom:1px solid var(--cinza-bg);text-align:center;white-space:nowrap}
+.tabela th:first-child,.tabela td:first-child{text-align:left;white-space:normal;min-width:240px}
+.tabela thead th{background:var(--lima-suave);color:var(--verde);font-weight:700}
+.tabela td .sub{display:block;font-size:11px;color:var(--muted)}
+.v-ok{color:var(--verde);font-weight:700} .v-nok{color:var(--erro);font-weight:700} .v-zero{color:#AEB9B2}
+
+.vazio{background:var(--papel);border:1px dashed var(--linha);border-radius:6px;padding:28px;text-align:center;color:var(--muted)}
+.carregando{color:var(--muted);padding:18px 0}
+.aviso-box{background:var(--aviso-bg);border:1px solid var(--ambar);color:var(--aviso);border-radius:6px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.aviso-box ul{margin:4px 0 0;padding-left:18px}
+.legenda{font-size:13px;color:var(--muted);margin:0 0 12px;max-width:860px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--tinta);color:#fff;padding:10px 18px;border-radius:6px;z-index:80;font-size:14px}
+.toast.erro{background:var(--erro)}
+
+.fundo-modal{position:fixed;inset:0;background:rgba(12,30,20,.55);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.modal{background:#fff;border-radius:10px;max-width:640px;width:100%;padding:22px 24px}
+.modal h3{margin:0 0 4px;color:var(--verde);font-size:19px}
+.modal .desc{margin:0 0 14px;color:var(--muted);font-size:14px}
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.campo label{font-size:13px;font-weight:600;color:var(--muted)}
+.campo input,.campo select,.campo textarea{padding:9px 11px;border:1px solid var(--linha);border-radius:6px;background:#fff;width:100%}
+.campo textarea{min-height:56px;resize:vertical}
+.campo .ajuda{font-size:12px;color:var(--muted)}
+.linha2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.linha2{grid-template-columns:1fr}}
+.regra{background:var(--fundo);border-radius:6px;padding:9px 12px;font-size:13px;margin-bottom:14px}
+.calc{border-radius:6px;padding:8px 12px;font-size:14px;margin:-4px 0 14px;background:var(--fundo)}
+.modal .rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-wrap:wrap}
+.erro-form{color:var(--erro);font-size:13px;margin:-4px 0 10px}
+.arq{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.arq label{font-weight:600;font-size:13px;min-width:180px}
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <div class="topo-inner">
+    <div>
+      <h1>Investigação de Acidentes</h1>
+      <div class="sub">Comitê de investigação e prazo conforme NP.AD.00.03.0002</div>
+    </div>
+    <div class="filtros">
+      <div><label for="f-safra">Safra</label><select id="f-safra"></select></div>
+      <div><label for="f-unid">Unidade</label><select id="f-unid"><option value="">Todas</option><option value="JB">JB</option><option value="PB">PB</option></select></div>
+      <div class="usuario-topo" id="usuario-topo" hidden></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="abas" role="tablist">
+    <button class="aba ativa" data-aba="oc" role="tab">Ocorrências</button>
+    <button class="aba" data-aba="safra" role="tab">Visão da safra</button>
+  </div>
+
+  <section id="aba-oc">
+    <div class="regua" id="regua"></div>
+    <div class="barra">
+      <h2 id="titulo-mes"></h2>
+      <span class="resumo" id="resumo-mes"></span>
+      <div class="dir">
+        <label class="chk"><input type="checkbox" id="f-todos"> mostrar também as sem deflator</label>
+        <button class="btn btn-primario" onclick="abrirImportacao()">Importar planilha</button>
+      </div>
+    </div>
+    <div id="lista"><div class="carregando">Carregando...</div></div>
+  </section>
+
+  <section id="aba-safra" class="hidden">
+    <p class="legenda">É assim que o Hub grava no IP, só com as ocorrências com <b>DEFLATOR = SIM</b> a partir de <b>outubro/2026</b>, no mês da ocorrência. Em cada célula: <b>Comitê</b> = comitê conforme a classificação; <b>Prazo</b> = investigação concluída no prazo. "—" = sem ocorrência no mês (0 de 0).</p>
+    <div class="tabela" id="tabela-safra"></div>
+  </section>
+</main>
+
+<div id="modal-raiz"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Conexão (mesmo projeto e sessão do portal)
+// ─────────────────────────────────────────────────────────────
+const SB_URL = 'https://umpctnchhmyvpjwxllaj.supabase.co';
+const SB_KEY = 'sb_publishable_lxiF04jATB1HMLINX-FvOg_3JOjXxrQ';
+const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageKey: 'sistema-ip-auth' } });
+const PORTAL_URL = 'https://tkichelewski-web.github.io/portal-ip/';
+
+// Apelidos de gerência do ATIVOS → cadastro do IP (os mesmos do Hub)
+const ALIASES_GERENCIA = {
+  'DIRETORIA DE PESSOAS': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERINTENDENCIA': 'Supervisão Excelência e Projetos',
+  'SUPERVISAO FACILITIES': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'GERENCIA RH': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERVISAO RH': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'GERENCIA JURIDICO': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERVISAO JURIDICO': 'RH/Jurídico/Restaurante/Saúde/Facilities'
+};
+// O controle começou em outubro/2026: ocorrências anteriores ficam na tela, mas não contam no IP
+const INICIO_CONTROLE = '2026-10-01';
+const contaNoIP = a => a.deflator && a.data >= INICIO_CONTROLE;
+const NIVEIS = ['Supervisor', 'Coordenador', 'Gerente', 'Diretor', 'Outro'];
+const MESES_SAFRA = [['04','Abr'],['05','Mai'],['06','Jun'],['07','Jul'],['08','Ago'],['09','Set'],['10','Out'],['11','Nov'],['12','Dez'],['01','Jan'],['02','Fev'],['03','Mar']];
+const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+let safras = [], gerencias = [], acidentes = [], usuarioAtual = null, mesSel = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const hojeMes = () => hojeISO().slice(0, 7);
+const fmtData = d => d ? d.slice(0, 10).split('-').reverse().join('/') : '';
+const nomeMesLongo = ym => NOMES_MES[Number(ym.slice(5, 7)) - 1] + ' de ' + ym.slice(0, 4);
+const safraAtual = () => safras.find(s => s.id === Number($('f-safra').value));
+const quem = () => ({ nome: usuarioAtual?.nome || null, email: usuarioAtual?.email || null });
+const agoraISO = () => new Date().toISOString();
+const gerPorId = id => gerencias.find(g => g.id === id);
+const nomeGer = g => g ? g.nome + (g.unidades?.nome && !norm(g.nome).endsWith(norm(g.unidades.nome)) ? ' — ' + g.unidades.nome : '') : '';
+const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+function mesesDaSafra(s) {
+  if (!s) return [];
+  return MESES_SAFRA.map(([n, abr]) => ({ ym: (Number(n) >= 4 ? s.ano_ini : s.ano_fim) + '-' + n, abr, ano: Number(n) >= 4 ? s.ano_ini : s.ano_fim }));
+}
+function toast(msg, erro) {
+  const t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), erro ? 6000 : 2600);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Regras do procedimento (iguais às da visão acidentes_ip no banco)
+// ─────────────────────────────────────────────────────────────
+function regra(a) {
+  const c = norm(a.classificacao);
+  const grave = c.includes('FATAL') || c.includes('GRANDE PROPOR');
+  return { prazo: grave ? 15 : 7, nivel: grave ? 'GERENTE' : 'SUPERVISOR', rotuloNivel: grave ? 'Gerente de área' : 'Supervisor de área' };
+}
+function comiteOk(a) {
+  const r = regra(a), n = norm(a.inv_responsavel_nivel);
+  const nivelOk = ['GERENTE', 'DIRETOR'].includes(n) || (r.nivel === 'SUPERVISOR' && ['SUPERVISOR', 'COORDENADOR'].includes(n));
+  return !!(a.inv_responsavel && a.inv_cipa && nivelOk);
+}
+function prazoInfo(a) {
+  const r = regra(a), limite = somaDias(a.data, r.prazo);
+  if (a.inv_data_conclusao) return a.inv_data_conclusao <= limite
+    ? { ok: true, cls: 't-ok', txt: `Concluída no prazo (${fmtData(a.inv_data_conclusao)})` }
+    : { ok: false, cls: 't-nok', txt: `Concluída fora do prazo (${fmtData(a.inv_data_conclusao)}, limite ${fmtData(limite)})` };
+  if (hojeISO() > limite) return { ok: false, cls: 't-nok', txt: `Prazo vencido em ${fmtData(limite)}` };
+  const dias = Math.round((new Date(limite + 'T12:00:00') - new Date(hojeISO() + 'T12:00:00')) / 86400000);
+  return { ok: false, cls: 't-pend', txt: `Vence em ${fmtData(limite)} (${dias} dia${dias === 1 ? '' : 's'})` };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Login (pelo portal)
+// ─────────────────────────────────────────────────────────────
+async function exigirLogin() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.replace(PORTAL_URL + '?voltar=' + encodeURIComponent(location.href.split('#')[0])); return false; }
+  const u = session.user;
+  const { data } = await sb.from('usuarios').select('nome').eq('auth_id', u.id).maybeSingle();
+  usuarioAtual = { nome: (data && data.nome) || u.email, email: (u.email || '').toLowerCase() };
+  const box = $('usuario-topo');
+  box.innerHTML = 'Conectado como <b></b><button type="button">Sair</button>';
+  box.querySelector('b').textContent = usuarioAtual.nome;
+  box.querySelector('button').onclick = async () => { await sb.auth.signOut(); location.href = PORTAL_URL; };
+  box.hidden = false;
+  return true;
+}
+
+async function init() {
+  if (!(await exigirLogin())) return;
+  const [rs, rg] = await Promise.all([
+    sb.from('safras').select('id,nome,ano_ini,ano_fim').eq('ativa', true).order('ano_ini', { ascending: false }),
+    sb.from('gerencias').select('id,nome,unidade_id,unidades(nome)').eq('ativo', true).order('nome')
+  ]);
+  if (rs.error || rg.error) { $('lista').innerHTML = `<div class="vazio">Não consegui ler o Supabase: ${esc((rs.error || rg.error).message)}</div>`; return; }
+  safras = rs.data || []; gerencias = rg.data || [];
+  $('f-safra').innerHTML = safras.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('');
+  $('f-safra').onchange = () => { mesSel = null; render(); };
+  $('f-unid').onchange = render;
+  $('f-todos').onchange = render;
+  document.querySelectorAll('.aba').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.aba').forEach(x => x.classList.toggle('ativa', x === b));
+    $('aba-oc').classList.toggle('hidden', b.dataset.aba !== 'oc');
+    $('aba-safra').classList.toggle('hidden', b.dataset.aba !== 'safra');
+    render();
+  });
+  carregar();
+}
+
+async function carregar() {
+  const { data, error } = await sb.from('acidentes').select('*').order('data');
+  if (error) { $('lista').innerHTML = `<div class="vazio">Erro: ${esc(error.message)}${String(error.message).includes('acidentes') ? '<br>Rode antes o SQL de criação da tabela.' : ''}</div>`; return; }
+  acidentes = data || [];
+  render();
+}
+
+function visiveis() {
+  const s = safraAtual(); if (!s) return [];
+  const ini = s.ano_ini + '-04-01', fim = s.ano_fim + '-03-31', u = $('f-unid').value;
+  return acidentes.filter(a => a.data >= ini && a.data <= fim && (!u || norm(a.unidade) === u));
+}
+function render() {
+  const s = safraAtual(); if (!s) return;
+  if (!mesSel) { const ms = mesesDaSafra(s).map(m => m.ym); mesSel = ms.includes(hojeMes()) ? hojeMes() : ms[ms.length - 1]; }
+  if (!$('aba-oc').classList.contains('hidden')) { renderRegua(); renderLista(); }
+  else renderSafra();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Aba: ocorrências
+// ─────────────────────────────────────────────────────────────
+function renderRegua() {
+  const vis = visiveis().filter(contaNoIP);
+  $('regua').innerHTML = mesesDaSafra(safraAtual()).map(m => {
+    const doMes = vis.filter(a => a.data.slice(0, 7) === m.ym);
+    const ok = doMes.filter(a => comiteOk(a) && prazoInfo(a).ok).length;
+    const txt = doMes.length ? `${ok}/${doMes.length}` : '—';
+    return `<div class="mes ${m.ym === mesSel ? 'sel' : ''} ${m.ym === hojeMes() ? 'atual' : ''}" tabindex="0" role="button" onclick="selMes('${m.ym}')" onkeydown="if(event.key==='Enter')selMes('${m.ym}')" aria-label="${nomeMesLongo(m.ym)}: ${txt}">
+      <div class="nome">${m.abr}</div><div class="ano">${m.ano}</div><div class="conta">${txt}</div></div>`;
+  }).join('');
+}
+function selMes(ym) { mesSel = ym; renderRegua(); renderLista(); }
+
+function renderLista() {
+  $('titulo-mes').textContent = nomeMesLongo(mesSel);
+  if (!acidentes.length) { $('resumo-mes').textContent = ''; $('lista').innerHTML = '<div class="vazio">Nenhuma ocorrência ainda. Clique em <b>Importar planilha</b>.</div>'; return; }
+  const doMes = visiveis().filter(a => a.data.slice(0, 7) === mesSel);
+  const defl = doMes.filter(contaNoIP);
+  const antes = mesSel < INICIO_CONTROLE.slice(0, 7);
+  const mostrar = $('f-todos').checked || antes ? doMes : defl;
+  $('resumo-mes').textContent = antes
+    ? `${doMes.length} ocorrência(s) — antes do início do controle (outubro/2026), não contam no IP`
+    : `${defl.length} com deflator · comitê conforme ${defl.filter(comiteOk).length} · no prazo ${defl.filter(a => prazoInfo(a).ok).length}` + (doMes.length > defl.length ? ` · ${doMes.length - defl.length} sem deflator` : '');
+  if (!mostrar.length) { $('lista').innerHTML = `<div class="vazio">Nenhuma ocorrência com deflator em ${nomeMesLongo(mesSel).toLowerCase()}.</div>`; return; }
+  const opcoesGer = sel => '<option value="">— escolha a gerência —</option>' + gerencias.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(nomeGer(g))}</option>`).join('');
+  $('lista').innerHTML = '<div class="lista">' + mostrar.sort((a, b) => a.data.localeCompare(b.data)).map(a => {
+    const p = prazoInfo(a), c = comiteOk(a);
+    const cls = !contaNoIP(a) ? 'fora' : (c && p.ok ? 'ok' : (p.cls === 't-nok' || (a.inv_responsavel && !c) ? 'nok' : ''));
+    const tagCom = a.inv_responsavel ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não registrado</span>';
+    return `<article class="oc ${cls}">
+      <div class="l1"><h4>${fmtData(a.data)} · ${esc(a.nome || '(sem nome)')}</h4>
+        <span class="tag t-neutro">${esc(a.classificacao || 'Sem classificação')}</span>
+        ${a.data < INICIO_CONTROLE ? '<span class="tag t-neutro">Antes de out/2026 — fora do IP</span>' : a.deflator ? '<span class="tag t-nok">Deflator</span>' : '<span class="tag t-neutro">Sem deflator — fora do IP</span>'}
+        <span style="font-size:13px;color:var(--muted)">${esc([a.unidade, a.area, a.setor].filter(Boolean).join(' · '))}</span></div>
+      <div class="rel">${esc(a.relato || '')}</div>
+      <div class="l2">
+        <label style="color:var(--muted)">Gerência:</label>
+        <select onchange="trocarGerencia(${a.id}, this.value)" aria-label="Gerência da ocorrência">${opcoesGer(a.gerencia_id)}</select>
+        ${a.gerencia_origem === 'manual' ? '<span class="tag t-neutro">escolhida à mão</span>' : a.gerencia_ativos ? `<span class="tag t-neutro" title="Texto no ATIVOS">ATIVOS: ${esc(a.gerencia_ativos)}</span>` : ''}
+      </div>
+      <div class="l2" style="margin-top:8px">
+        ${tagCom}<span class="tag ${p.cls}">${esc(p.txt)}</span>
+        ${a.inv_relatorio_url ? `<a class="btn-link" href="${esc(a.inv_relatorio_url)}" target="_blank" rel="noopener">Relatório</a>` : ''}
+        <button class="btn btn-sec" style="margin-left:auto" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao ? 'Ver / editar investigação' : 'Registrar investigação'}</button>
+      </div></article>`;
+  }).join('') + '</div>';
+}
+
+async function trocarGerencia(id, valor) {
+  const a = acidentes.find(x => x.id === id); if (!a) return;
+  const dados = { gerencia_id: valor ? Number(valor) : null, gerencia_origem: valor ? 'manual' : null, atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO() };
+  const { error } = await sb.from('acidentes').update(dados).eq('id', id);
+  if (error) { toast('Não salvou: ' + error.message, true); return; }
+  Object.assign(a, dados); toast('Gerência atualizada'); render();
+}
+
+function abrirInvestigacao(id) {
+  const a = acidentes.find(x => x.id === id); if (!a) return;
+  const r = regra(a), limite = somaDias(a.data, r.prazo);
+  abrirModal(`
+    <h3>Investigação da ocorrência</h3>
+    <p class="desc">${fmtData(a.data)} · ${esc(a.nome || '')} · ${esc(a.classificacao || 'Sem classificação')}</p>
+    <div class="regra">Pelo procedimento: responsável <b>${r.rotuloNivel}</b>, ao menos <b>1 membro da CIPA/CIPATR</b> no comitê, e análise concluída em até <b>${r.prazo} dias</b> (até ${fmtData(limite)}).${a.status_planilha ? `<br>Status na planilha: ${esc(a.status_planilha)}` : ''}</div>
+    <div class="linha2">
+      <div class="campo"><label for="i-resp">Responsável pela análise</label><input id="i-resp" value="${esc(a.inv_responsavel || '')}" placeholder="Nome"></div>
+      <div class="campo"><label for="i-nivel">Cargo do responsável</label>
+        <select id="i-nivel"><option value="">—</option>${NIVEIS.map(n => `<option ${a.inv_responsavel_nivel === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label for="i-cipa">Membro da CIPA/CIPATR no comitê?</label>
+        <select id="i-cipa"><option value="">—</option><option value="1" ${a.inv_cipa === true ? 'selected' : ''}>Sim</option><option value="0" ${a.inv_cipa === false ? 'selected' : ''}>Não</option></select></div>
+      <div class="campo"><label for="i-cipanome">Nome do membro da CIPA</label><input id="i-cipanome" value="${esc(a.inv_cipa_nome || '')}"></div>
+    </div>
+    <div class="campo"><label for="i-part">Demais participantes do comitê</label><textarea id="i-part">${esc(a.inv_participantes || '')}</textarea></div>
+    <div class="linha2">
+      <div class="campo"><label for="i-data">Data de conclusão da análise</label><input type="date" id="i-data" min="${a.data}" max="${hojeISO()}" value="${a.inv_data_conclusao || ''}">
+        <span class="ajuda">Deixe em branco enquanto a análise não terminar.</span></div>
+      <div class="campo"><label for="i-rel">Link do relatório no SharePoint</label><input type="url" id="i-rel" value="${esc(a.inv_relatorio_url || '')}" placeholder="https://..."></div>
+    </div>
+    <div class="campo"><label for="i-obs">Observações</label><textarea id="i-obs">${esc(a.inv_observacoes || '')}</textarea></div>
+    <div class="calc" id="i-calc"></div>
+    ${a.inv_registrado_por ? `<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px">Registrado por ${esc(a.inv_registrado_por)} em ${fmtData(a.inv_registrado_em)}${a.atualizado_por && a.atualizado_por !== a.inv_registrado_por ? ' · alterado por ' + esc(a.atualizado_por) : ''}</p>` : ''}
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="i-salvar">Salvar</button></div>`);
+  const leitura = () => ({ ...a, inv_responsavel: $('i-resp').value.trim() || null, inv_responsavel_nivel: $('i-nivel').value || null,
+    inv_cipa: $('i-cipa').value === '' ? null : $('i-cipa').value === '1', inv_data_conclusao: $('i-data').value || null });
+  const calc = () => {
+    const x = leitura(), p = prazoInfo(x), c = comiteOk(x);
+    $('i-calc').innerHTML = `Comitê: <b style="color:${c ? 'var(--verde)' : 'var(--erro)'}">${c ? 'conforme' : 'fora da regra'}</b> · Prazo: <b>${esc(p.txt)}</b>`;
+  };
+  ['i-resp', 'i-nivel', 'i-cipa', 'i-data'].forEach(k => { $(k).oninput = calc; $(k).onchange = calc; }); calc();
+  $('i-salvar').onclick = async () => {
+    const x = leitura(), erro = t => { $('m-erro').textContent = t; };
+    if (x.inv_data_conclusao && x.inv_data_conclusao < a.data) return erro('A conclusão não pode ser antes da ocorrência.');
+    if (x.inv_data_conclusao && !$('i-rel').value.trim()) return erro('Com a análise concluída, informe o link do relatório.');
+    if (x.inv_cipa && !$('i-cipanome').value.trim()) return erro('Informe o nome do membro da CIPA/CIPATR.');
+    const dados = { inv_responsavel: x.inv_responsavel, inv_responsavel_nivel: x.inv_responsavel_nivel, inv_cipa: x.inv_cipa,
+      inv_cipa_nome: $('i-cipanome').value.trim() || null, inv_participantes: $('i-part').value.trim() || null,
+      inv_data_conclusao: x.inv_data_conclusao, inv_relatorio_url: $('i-rel').value.trim() || null, inv_observacoes: $('i-obs').value.trim() || null,
+      atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO(),
+      ...(a.inv_registrado_por ? {} : { inv_registrado_por: quem().nome, inv_registrado_em: agoraISO() }) };
+    const btn = $('i-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
+    const { error } = await sb.from('acidentes').update(dados).eq('id', a.id);
+    if (error) { btn.disabled = false; btn.textContent = 'Tentar de novo'; return erro('Não salvou: ' + error.message); }
+    Object.assign(a, dados); fecharModal(); toast('Investigação salva'); render();
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Importação: planilha de acidentes (SharePoint) + ATIVOS (gerência pela matrícula)
+// ─────────────────────────────────────────────────────────────
+function abrirImportacao() {
+  abrirModal(`
+    <h3>Importar planilha de acidentes</h3>
+    <p class="desc">Use a exportação da lista "Controle Acidente e Incidente". A gerência vem do ATIVOS pela matrícula. Ocorrências já importadas são atualizadas, sem perder a investigação nem a gerência escolhida à mão.</p>
+    <div class="arq"><label for="arq-ac">Planilha de acidentes</label><input type="file" id="arq-ac" accept=".xlsx,.xls,.csv"></div>
+    <div class="arq"><label for="arq-at">ATIVOS (opcional, recomendado)</label><input type="file" id="arq-at" accept=".xlsx,.xls,.csv"></div>
+    <div id="imp-previa"></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="imp-ler">Ler arquivos</button></div>`);
+  $('imp-ler').onclick = lerArquivos;
+}
+async function lerXlsx(f) {
+  const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array', cellDates: true });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+}
+const col = (l, nomes) => { for (const n of nomes) { const k = Object.keys(l).find(x => norm(x) === norm(n)); if (k !== undefined && l[k] !== null && l[k] !== '') return l[k]; } return null; };
+function dataISO(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);
+  const m = String(v || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const m2 = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? m2[0] : null;
+}
+const soDigitos = v => String(v ?? '').replace(/\D/g, '').replace(/^0+/, '');
+function acharGerencia(texto, unidade) {
+  if (!texto) return null;
+  const alvo = ALIASES_GERENCIA[norm(texto)] || texto;
+  const base = norm(alvo).replace(/\s*-\s*(JB|PB)$/, '').replace(/^GERENCIA\s+/, '');
+  const sufixo = (norm(alvo).match(/-\s*(JB|PB)$/) || [])[1] || norm(unidade);
+  const cands = gerencias.filter(g => norm(g.nome).replace(/\s*-\s*(JB|PB)$/, '').replace(/^GERENCIA\s+/, '') === base);
+  if (cands.length <= 1) return cands[0] || null;
+  const daUn = cands.filter(g => norm(g.unidades?.nome) === sufixo || norm(g.nome).endsWith('- ' + sufixo));
+  return daUn.length === 1 ? daUn[0] : null;
+}
+
+async function lerArquivos() {
+  const fa = $('arq-ac').files[0], ft = $('arq-at').files[0];
+  if (!fa) { $('m-erro').textContent = 'Escolha a planilha de acidentes.'; return; }
+  $('m-erro').textContent = ''; $('imp-previa').innerHTML = '<div class="carregando">Lendo...</div>';
+  try {
+    const linhas = await lerXlsx(fa);
+    const ativos = ft ? await lerXlsx(ft) : [];
+    const porMat = {};
+    ativos.forEach(l => { const m = soDigitos(col(l, ['MATRICULA', 'Matrícula', 'MATRÍCULA'])); const g = col(l, ['GERENCIA', 'GERÊNCIA']); if (m && g && !porMat[m]) porMat[m] = String(g).trim(); });
+
+    const novos = [], semGer = [], vistas = new Set();
+    let ignoradas = 0, repetidas = 0;
+    linhas.forEach(l => {
+      const data = dataISO(col(l, ['DATA']));
+      if (!data) { ignoradas++; return; }
+      const mat = soDigitos(col(l, ['MATRICULA', 'MATRÍCULA']));
+      const nome = (col(l, ['NOME COLABORADOR', 'NOME']) || '').toString().trim();
+      const chave = data + '|' + (mat || norm(nome));
+      if (vistas.has(chave)) { repetidas++; return; }
+      vistas.add(chave);
+      const unidade = (col(l, ['UNIDADE']) || '').toString().trim();
+      const gerTxt = mat ? porMat[mat] : null;
+      const g = acharGerencia(gerTxt, unidade);
+      const reg = {
+        chave, data, unidade, diretoria: col(l, ['DIRETORIA']), area: col(l, ['AREAS', 'ÁREAS', 'AREA']), setor: (col(l, ['SETOR']) || '').toString().trim() || null,
+        tipo_ocorrencia: col(l, ['TIPO DE OCORRÊNCIA']), classificacao: col(l, ['CLASSIFICAÇÃO OCORRÊNCIA', 'CLASSIFICACAO OCORRENCIA']),
+        relato: col(l, ['BREVE RELATO']), matricula: mat || null, nome: nome || null, cargo: col(l, ['CARGO']),
+        tipo_colaborador: col(l, ['TIPO COLABORADOR']), deflator: norm(col(l, ['DEFLATOR'])) === 'SIM', status_planilha: col(l, ['INVESTIGAÇÃO', 'INVESTIGACAO']),
+        gerencia_ativos: gerTxt || null, _ger: g ? g.id : null
+      };
+      novos.push(reg);
+      if (reg.deflator && reg.data >= INICIO_CONTROLE && !g) semGer.push(reg);
+    });
+
+    const existentes = new Map(acidentes.map(a => [a.chave, a]));
+    const nNovos = novos.filter(n => !existentes.has(n.chave)).length;
+    const semGerReal = semGer.filter(n => { const e = existentes.get(n.chave); return !(e && e.gerencia_origem === 'manual' && e.gerencia_id); });
+    $('imp-previa').innerHTML = `<div class="regra">${novos.length} ocorrência(s) na planilha (${novos.filter(n => n.deflator).length} com deflator): <b>${nNovos} nova(s)</b> e ${novos.length - nNovos} já existente(s), que serão atualizadas.${ignoradas ? ` ${ignoradas} linha(s) sem data foram ignoradas.` : ''}${repetidas ? ` ${repetidas} linha(s) repetidas (mesma pessoa e data) foram ignoradas.` : ''}${!ft ? '<br>Sem o ATIVOS, a gerência das novas fica em branco para escolher na lista.' : ''}</div>` +
+      (semGerReal.length ? `<div class="aviso-box">${semGerReal.length} ocorrência(s) com deflator ficaram <b>sem gerência</b> (matrícula fora do ATIVOS ou gerência não reconhecida). Depois de importar, escolha a gerência na lista:<ul>${semGerReal.slice(0, 8).map(n => `<li>${fmtData(n.data)} · ${esc(n.nome || '')}${n.gerencia_ativos ? ' — ATIVOS: ' + esc(n.gerencia_ativos) : ''}</li>`).join('')}${semGerReal.length > 8 ? '<li>…</li>' : ''}</ul></div>` : '');
+    const btn = $('imp-ler'); btn.textContent = 'Gravar importação';
+    btn.onclick = () => gravarImportacao(novos, existentes);
+  } catch (e) {
+    console.error(e); $('imp-previa').innerHTML = ''; $('m-erro').textContent = 'Não consegui ler: ' + e.message;
+  }
+}
+async function gravarImportacao(novos, existentes) {
+  const btn = $('imp-ler'); btn.disabled = true; btn.textContent = 'Gravando...';
+  try {
+    const linhas = novos.map(n => {
+      const e = existentes.get(n.chave);
+      const { _ger, ...r } = n;
+      // Gerência escolhida à mão não é sobrescrita
+      if (e && e.gerencia_origem === 'manual') { r.gerencia_id = e.gerencia_id; r.gerencia_origem = 'manual'; }
+      else if (_ger) { r.gerencia_id = _ger; r.gerencia_origem = 'ativos'; }
+      else if (e) { r.gerencia_id = e.gerencia_id; r.gerencia_origem = e.gerencia_origem; }
+      else { r.gerencia_id = null; r.gerencia_origem = null; }
+      r.importado_em = agoraISO();
+      return r;
+    });
+    for (let i = 0; i < linhas.length; i += 200) {
+      const { error } = await sb.from('acidentes').upsert(linhas.slice(i, i + 200), { onConflict: 'chave' });
+      if (error) throw error;
+    }
+    fecharModal(); toast(`${linhas.length} ocorrência(s) importada(s)`); carregar();
+  } catch (e) {
+    console.error(e); btn.disabled = false; btn.textContent = 'Tentar de novo'; $('m-erro').textContent = 'Não gravou: ' + e.message;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Aba: visão da safra
+// ─────────────────────────────────────────────────────────────
+function renderSafra() {
+  const meses = mesesDaSafra(safraAtual());
+  const vis = visiveis().filter(contaNoIP);
+  const semGer = vis.filter(a => !a.gerencia_id).length;
+  const gids = [...new Set(vis.filter(a => a.gerencia_id).map(a => a.gerencia_id))].sort((a, b) => nomeGer(gerPorId(a)).localeCompare(nomeGer(gerPorId(b))));
+  if (!gids.length) { $('tabela-safra').innerHTML = '<div class="vazio">Nenhuma ocorrência com deflator e gerência definida nesta safra.</div>'; return; }
+  const linhas = gids.map(gid => `<tr><td>${esc(nomeGer(gerPorId(gid)))}</td>` + meses.map(m => {
+    const doMes = vis.filter(a => a.gerencia_id === gid && a.data.slice(0, 7) === m.ym);
+    if (!doMes.length) return '<td class="v-zero">—</td>';
+    const c = doMes.filter(comiteOk).length, p = doMes.filter(a => prazoInfo(a).ok).length, n = doMes.length;
+    return `<td><span class="${c >= n ? 'v-ok' : 'v-nok'}">${c}/${n}</span> <span class="${p >= n ? 'v-ok' : 'v-nok'}">${p}/${n}</span><span class="sub">comitê · prazo</span></td>`;
+  }).join('') + '</tr>').join('');
+  $('tabela-safra').innerHTML = (semGer ? `<div class="aviso-box" style="margin:10px">${semGer} ocorrência(s) com deflator sem gerência não entram no IP. Escolha a gerência na aba Ocorrências.</div>` : '') +
+    `<table><thead><tr><th>Gerência</th>${meses.map(m => `<th>${m.abr}/${String(m.ano).slice(2)}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table>`;
+}
+
+function abrirModal(html) {
+  $('modal-raiz').innerHTML = `<div class="fundo-modal" onclick="if(event.target===this)fecharModal()"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  const p = $('modal-raiz').querySelector('input,select,textarea'); if (p) p.focus();
+}
+function fecharModal() { $('modal-raiz').innerHTML = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+init();
+</script>
+</body>
+</html>
