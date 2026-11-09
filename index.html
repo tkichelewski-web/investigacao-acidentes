@@ -99,6 +99,9 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
 .campo .ajuda{font-size:12px;color:var(--muted)}
 .linha2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:560px){.linha2{grid-template-columns:1fr}}
+.secao-inv{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linha);font-size:13px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:.05em}
+.comite-campos{border:none;margin:0;padding:0;min-width:0}
+.comite-campos:disabled input,.comite-campos:disabled select,.comite-campos:disabled textarea{background:#F2F5F0;color:var(--muted);cursor:not-allowed}
 .regra{background:var(--fundo);border-radius:6px;padding:9px 12px;font-size:13px;margin-bottom:14px}
 .calc{border-radius:6px;padding:8px 12px;font-size:14px;margin:-4px 0 14px;background:var(--fundo)}
 .modal .rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-wrap:wrap}
@@ -340,11 +343,15 @@ async function trocarGerencia(id, valor) {
 
 function abrirInvestigacao(id) {
   const a = acidentes.find(x => x.id === id); if (!a) return;
+  // Comitê já registrado: fica travado; na baixa só entram conclusão, link e observações
+  const comiteTravado = !!(a.inv_responsavel && a.inv_responsavel_nivel && a.inv_cipa !== null && a.inv_cipa !== undefined);
   const r = regra(a), limite = somaDias(a.data, r.prazo);
   abrirModal(`
     <h3>Investigação da ocorrência</h3>
     <p class="desc">${fmtData(a.data)} · ${esc(a.nome || '')} · ${esc(a.classificacao || 'Sem classificação')}</p>
     <div class="regra">Pelo procedimento: responsável <b>${r.rotuloNivel}</b>, ao menos <b>1 membro da CIPA/CIPATR</b> no comitê, e análise concluída em até <b>${r.prazo} dias</b> (até ${fmtData(limite)}).${a.status_planilha ? `<br>Status na planilha: ${esc(a.status_planilha)}` : ''}</div>
+    <div class="secao-inv"><span>1 · Comitê de investigação</span>${comiteTravado ? '<button type="button" class="btn-link" id="i-alterar">Alterar comitê</button>' : ''}</div>
+    <fieldset id="i-comite" class="comite-campos" ${comiteTravado ? 'disabled' : ''}>
     <div class="linha2">
       <div class="campo"><label for="i-resp">Responsável pela análise</label><input id="i-resp" value="${esc(a.inv_responsavel || '')}" placeholder="Nome"></div>
       <div class="campo"><label for="i-nivel">Cargo do responsável</label>
@@ -356,6 +363,8 @@ function abrirInvestigacao(id) {
       <div class="campo"><label for="i-cipanome">Nome do membro da CIPA</label><input id="i-cipanome" value="${esc(a.inv_cipa_nome || '')}"></div>
     </div>
     <div class="campo"><label for="i-part">Demais participantes do comitê</label><textarea id="i-part">${esc(a.inv_participantes || '')}</textarea></div>
+    </fieldset>
+    <div class="secao-inv"><span>2 · Baixa da investigação</span></div>
     <div class="linha2">
       <div class="campo"><label for="i-data">Data de conclusão da análise</label><input type="date" id="i-data" min="${a.data}" max="${hojeISO()}" value="${a.inv_data_conclusao || ''}">
         <span class="ajuda">Deixe em branco enquanto a análise não terminar.</span></div>
@@ -366,6 +375,7 @@ function abrirInvestigacao(id) {
     ${a.inv_registrado_por ? `<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px">Registrado por ${esc(a.inv_registrado_por)} em ${fmtData(a.inv_registrado_em)}${a.atualizado_por && a.atualizado_por !== a.inv_registrado_por ? ' · alterado por ' + esc(a.atualizado_por) : ''}</p>` : ''}
     <div id="m-erro" class="erro-form"></div>
     <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="i-salvar">Salvar</button></div>`);
+  if ($('i-alterar')) $('i-alterar').onclick = () => { $('i-comite').disabled = false; $('i-alterar').remove(); $('i-resp').focus(); };
   const leitura = () => ({ ...a, inv_responsavel: $('i-resp').value.trim() || null, inv_responsavel_nivel: $('i-nivel').value || null,
     inv_cipa: $('i-cipa').value === '' ? null : $('i-cipa').value === '1', inv_data_conclusao: $('i-data').value || null });
   const calc = () => {
