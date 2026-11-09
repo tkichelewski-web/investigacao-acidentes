@@ -99,6 +99,12 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
 .campo .ajuda{font-size:12px;color:var(--muted)}
 .linha2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:560px){.linha2{grid-template-columns:1fr}}
+.badge-com{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--vermelho);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:4px}
+.badge-com:empty{display:none}
+.com-card{background:var(--papel);border:1px solid var(--linha);border-left:5px solid var(--ambar);border-radius:6px;padding:12px 16px;margin-bottom:10px}
+.com-card .l1{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.com-card h4{margin:0;font-size:15px}
+.com-card .meta{font-size:13px;color:var(--muted);margin:4px 0 6px}
 .secao-inv{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linha);font-size:13px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:.05em}
 .comite-campos{border:none;margin:0;padding:0;min-width:0}
 .comite-campos:disabled input,.comite-campos:disabled select,.comite-campos:disabled textarea{background:#F2F5F0;color:var(--muted);cursor:not-allowed}
@@ -128,6 +134,7 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
 
 <main>
   <div class="abas" role="tablist">
+    <button class="aba" data-aba="com" role="tab">Comunicados a classificar <span id="badge-com" class="badge-com"></span></button>
     <button class="aba ativa" data-aba="oc" role="tab">Ocorrências</button>
     <button class="aba" data-aba="safra" role="tab">Visão da safra</button>
   </div>
@@ -139,10 +146,16 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
       <span class="resumo" id="resumo-mes"></span>
       <div class="dir">
         <label class="chk"><input type="checkbox" id="f-todos"> mostrar também as sem deflator</label>
-        <button class="btn btn-primario" onclick="abrirImportacao()">Importar planilha</button>
+        <button class="btn btn-primario" onclick="abrirOcorrencia()">＋ Nova ocorrência</button>
+        <button class="btn btn-link" onclick="abrirImportacao()" title="Importar a planilha antiga do SharePoint">importar planilha</button>
       </div>
     </div>
     <div id="lista"><div class="carregando">Carregando...</div></div>
+  </section>
+
+  <section id="aba-com" class="hidden">
+    <p class="legenda">Comunicados de acidente e incidente enviados pelo formulário, a partir de outubro/2026, que ainda não foram classificados. Clique em <b>Classificar</b>: informe o colaborador, a classificação e se é deflator. Depois disso o comunicado vira uma ocorrência na aba <b>Ocorrências</b>.</p>
+    <div id="lista-com"><div class="carregando">Carregando os comunicados...</div></div>
   </section>
 
   <section id="aba-safra" class="hidden">
@@ -175,6 +188,10 @@ const ALIASES_GERENCIA = {
 // O controle começou em outubro/2026: ocorrências anteriores ficam na tela, mas não contam no IP
 const INICIO_CONTROLE = '2026-10-01';
 const contaNoIP = a => a.deflator && a.data >= INICIO_CONTROLE;
+// Comunicados de ocorrência (Google Planilhas / Apps Script do formulário de comunicado)
+const COMUNICADOS_URL = '';            // cole aqui o endereço do App da Web (termina em /exec)
+const COMUNICADOS_CHAVE = '';          // a mesma CHAVE_LEITURA_IP colocada no Apps Script
+let comunicados = [], comunicadosErro = '';
 const NIVEIS = ['Supervisor', 'Coordenador', 'Gerente', 'Diretor', 'Outro'];
 const MESES_SAFRA = [['04','Abr'],['05','Mai'],['06','Jun'],['07','Jul'],['08','Ago'],['09','Set'],['10','Out'],['11','Nov'],['12','Dez'],['01','Jan'],['02','Fev'],['03','Mar']];
 const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -182,6 +199,7 @@ const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho'
 let safras = [], gerencias = [], acidentes = [], usuarioAtual = null, mesSel = null;
 
 const $ = id => document.getElementById(id);
+const semTags = t => String(t ?? '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
 const hojeISO = () => new Date().toISOString().slice(0, 10);
@@ -261,7 +279,8 @@ async function init() {
     document.querySelectorAll('.aba').forEach(x => x.classList.toggle('ativa', x === b));
     $('aba-oc').classList.toggle('hidden', b.dataset.aba !== 'oc');
     $('aba-safra').classList.toggle('hidden', b.dataset.aba !== 'safra');
-    render();
+    $('aba-com').classList.toggle('hidden', b.dataset.aba !== 'com');
+    if (b.dataset.aba === 'com') renderComunicados(); else render();
   });
   carregar();
 }
@@ -271,6 +290,7 @@ async function carregar() {
   if (error) { $('lista').innerHTML = `<div class="vazio">Erro: ${esc(error.message)}${String(error.message).includes('acidentes') ? '<br>Rode antes o SQL de criação da tabela.' : ''}</div>`; return; }
   acidentes = data || [];
   render();
+  carregarComunicados();
 }
 
 function visiveis() {
@@ -302,7 +322,7 @@ function selMes(ym) { mesSel = ym; renderRegua(); renderLista(); }
 
 function renderLista() {
   $('titulo-mes').textContent = nomeMesLongo(mesSel);
-  if (!acidentes.length) { $('resumo-mes').textContent = ''; $('lista').innerHTML = '<div class="vazio">Nenhuma ocorrência ainda. Clique em <b>Importar planilha</b>.</div>'; return; }
+  if (!acidentes.length) { $('resumo-mes').textContent = ''; $('lista').innerHTML = '<div class="vazio">Nenhuma ocorrência ainda. Clique em <b>＋ Nova ocorrência</b>.</div>'; return; }
   const doMes = visiveis().filter(a => a.data.slice(0, 7) === mesSel);
   const defl = doMes.filter(contaNoIP);
   const antes = mesSel < INICIO_CONTROLE.slice(0, 7);
@@ -318,11 +338,11 @@ function renderLista() {
     const comiteInformado = a.inv_comite_conforme === true || a.inv_comite_conforme === false || !!a.inv_responsavel;
     const tagCom = comiteInformado ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não informado</span>';
     return `<article class="oc ${cls}">
-      <div class="l1"><h4>${fmtData(a.data)} · ${esc(a.nome || '(sem nome)')}</h4>
+      <div class="l1"><h4>${fmtData(a.data)} · ${esc(semTags(a.nome) || '(sem nome)')}</h4>
         <span class="tag t-neutro">${esc(a.classificacao || 'Sem classificação')}</span>
         ${a.data < INICIO_CONTROLE ? '<span class="tag t-neutro">Antes de out/2026 — fora do IP</span>' : a.deflator ? '<span class="tag t-nok">Deflator</span>' : '<span class="tag t-neutro">Sem deflator — fora do IP</span>'}
         <span style="font-size:13px;color:var(--muted)">${esc([a.unidade, a.area, a.setor].filter(Boolean).join(' · '))}</span></div>
-      <div class="rel">${esc(a.relato || '')}</div>
+      <div class="rel">${esc(semTags(a.relato))}</div>
       <div class="l2">
         <label style="color:var(--muted)">Gerência:</label>
         <select onchange="trocarGerencia(${a.id}, this.value)" aria-label="Gerência da ocorrência">${opcoesGer(a.gerencia_id)}</select>
@@ -331,7 +351,8 @@ function renderLista() {
       <div class="l2" style="margin-top:8px">
         ${tagCom}<span class="tag ${p.cls}">${esc(p.txt)}</span>
         ${a.inv_relatorio_url ? `<a class="btn-link" href="${esc(a.inv_relatorio_url)}" target="_blank" rel="noopener">Relatório</a>` : ''}
-        <button class="btn btn-sec" style="margin-left:auto" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao ? 'Ver / editar investigação' : 'Registrar investigação'}</button>
+        <button class="btn btn-link" style="margin-left:auto" onclick="abrirOcorrencia(${a.id})">Editar ocorrência</button>
+        <button class="btn btn-sec" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao ? 'Ver / editar investigação' : 'Registrar investigação'}</button>
       </div></article>`;
   }).join('') + '</div>';
 }
@@ -386,6 +407,165 @@ function abrirInvestigacao(id) {
     Object.assign(a, dados); fecharModal(); toast('Investigação salva'); render();
   };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Cadastro da ocorrência direto na tela (o colaborador vem do ATIVOS do Supabase)
+// ─────────────────────────────────────────────────────────────
+const CLASSIFICACOES = ['ASA (PRIMEIROS SOCORROS)', 'ASA (TRATAMENTO MÉDICO)', 'ASA (TRABALHO RESTRITO)', 'ACA (AFASTAMENTO)', 'FATALIDADE',
+  'INCIDENTE DE ALTO POTENCIAL', 'ACIDENTE AMBIENTAL DE BAIXA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE MÉDIA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE GRANDE PROPORÇÃO', 'TRAJETO'];
+const unidadeSigla = u => { const n = norm(u); return n.includes('JABOTICABAL') || n === 'JB' ? 'JB' : n.includes('PEREIRA') || n === 'PB' ? 'PB' : (u || ''); };
+async function buscarNoAtivos(mat) {
+  const m = String(mat || '').replace(/\D/g, ''); if (!m) return null;
+  const { data } = await sb.from('ativos').select('matricula,nome,unidade,diretoria,gerencia,supervisao,cargo').eq('matricula', m).maybeSingle();
+  return data || null;
+}
+function abrirOcorrencia(id, com) {
+  let a = id ? acidentes.find(x => x.id === id) : null;
+  // Vindo de um comunicado: já traz data, unidade, local, tipo e relato
+  if (!a && com) {
+    const un = unidadeSigla(cc(com, ['Unidade']));
+    const gc = acharGerencia(cc(com, ['Gerência', 'Gerencia']), un);
+    const detalhes = [cc(com, ['Parte do corpo', 'Parte do Corpo']) && 'Parte do corpo: ' + cc(com, ['Parte do corpo', 'Parte do Corpo']), cc(com, ['Lado']) && 'Lado: ' + cc(com, ['Lado']), cc(com, ['Status do atendimento', 'Tratamento', 'Atendimento']) && 'Tratamento: ' + cc(com, ['Status do atendimento', 'Tratamento', 'Atendimento'])].filter(Boolean).join(' · ');
+    a = { _novo: true, comunicado_codigo: String(cc(com, ['Código'])), data: String(cc(com, ['Data'])).slice(0, 10), unidade: un,
+      area: [cc(com, ['Item', 'Local / Frente', 'Local']), cc(com, ['Complemento do local'])].filter(Boolean).join(' — '), setor: cc(com, ['Setor', 'Supervisão']) || '',
+      tipo_ocorrencia: norm(cc(com, ['Tipo'])) === 'INCIDENTE' ? 'Incidente' : 'Acidente', classificacao: '', deflator: norm(cc(com, ['Tipo'])) !== 'INCIDENTE',
+      relato: [semTags(cc(com, ['Descrição', 'Descricao'])), detalhes].filter(Boolean).join(' — '),
+      gerencia_id: gc ? gc.id : null, gerencia_origem: gc ? 'comunicado' : null };
+  }
+  const editando = a && !a._novo;
+  const opcoesGer = sel => '<option value="">— escolha —</option>' + gerencias.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(nomeGer(g))}</option>`).join('');
+  const classAtual = a?.classificacao || '';
+  abrirModal(`
+    <h3>${editando ? 'Editar ocorrência' : a?._novo ? 'Classificar comunicado ' + esc(a.comunicado_codigo) : 'Nova ocorrência'}</h3>
+    <p class="desc">Digite a matrícula: nome, cargo, unidade e gerência vêm do ATIVOS (atualizado todo dia). Para terceiros, preencha à mão.</p>
+    <div class="linha2">
+      <div class="campo"><label for="o-data">Data da ocorrência</label><input type="date" id="o-data" max="${hojeISO()}" value="${a?.data || ''}"></div>
+      <div class="campo"><label for="o-tipocol">Colaborador</label>
+        <select id="o-tipocol"><option ${!a || norm(a.tipo_colaborador) !== 'TERCEIRO' ? 'selected' : ''}>Próprio</option><option ${norm(a?.tipo_colaborador) === 'TERCEIRO' ? 'selected' : ''}>Terceiro</option></select></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label for="o-mat">Matrícula</label><input id="o-mat" inputmode="numeric" value="${esc(a?.matricula || '')}" placeholder="Ex.: 20021665">
+        <span class="ajuda" id="o-ativos-info"></span></div>
+      <div class="campo"><label for="o-nome">Nome do colaborador</label><input id="o-nome" value="${esc(semTags(a?.nome))}"></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label for="o-cargo">Cargo</label><input id="o-cargo" value="${esc(a?.cargo || '')}"></div>
+      <div class="campo"><label for="o-un">Unidade</label><select id="o-un"><option value="">—</option><option ${unidadeSigla(a?.unidade) === 'JB' ? 'selected' : ''}>JB</option><option ${unidadeSigla(a?.unidade) === 'PB' ? 'selected' : ''}>PB</option></select></div>
+    </div>
+    <div class="campo"><label for="o-ger">Gerência (onde conta no IP)</label><select id="o-ger">${opcoesGer(a?.gerencia_id)}</select>
+      <span class="ajuda">Colaborador emprestado a outra área? Escolha a gerência onde ocorreu.</span></div>
+    <div class="linha2">
+      <div class="campo"><label for="o-area">Área / local</label><input id="o-area" value="${esc(a?.area || '')}"></div>
+      <div class="campo"><label for="o-setor">Setor</label><input id="o-setor" value="${esc(a?.setor || '')}"></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label for="o-tipo">Tipo de ocorrência</label>
+        <select id="o-tipo">${['Acidente', 'Incidente', 'Ambiental'].map(t => `<option ${norm(a?.tipo_ocorrencia) === norm(t) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="campo"><label for="o-class">Classificação</label>
+        <select id="o-class"><option value="">— escolha —</option>${CLASSIFICACOES.map(c => `<option ${norm(classAtual) === norm(c) ? 'selected' : ''}>${c}</option>`).join('')}${classAtual && !CLASSIFICACOES.some(c => norm(c) === norm(classAtual)) ? `<option selected>${esc(classAtual)}</option>` : ''}</select></div>
+    </div>
+    <div class="campo"><label for="o-defl">Conta como deflator?</label>
+      <select id="o-defl"><option value="1" ${!a || a.deflator ? 'selected' : ''}>Sim</option><option value="0" ${a && !a.deflator ? 'selected' : ''}>Não</option></select>
+      <span class="ajuda">Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.</span></div>
+    <div class="campo"><label for="o-relato">Breve relato</label><textarea id="o-relato" rows="3">${esc(semTags(a?.relato))}</textarea></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape">
+      ${editando ? '<button class="btn btn-link" id="o-excluir" style="margin-right:auto;color:var(--erro)">Excluir ocorrência</button>' : ''}
+      <button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="o-salvar">${editando ? 'Salvar' : 'Salvar ocorrência'}</button></div>`);
+  let gerAtivos = a?.gerencia_ativos || null, origem = a?.gerencia_origem || null;
+  $('o-class').onchange = () => { const c = norm($('o-class').value); if (c.includes('TRAJETO')) $('o-defl').value = '0'; };
+  $('o-ger').onchange = () => { origem = 'manual'; };
+  $('o-mat').onchange = async () => {
+    const info = $('o-ativos-info'); info.textContent = 'Procurando no ATIVOS...';
+    const r = await buscarNoAtivos($('o-mat').value);
+    if (!r) { info.textContent = 'Matrícula não encontrada no ATIVOS: preencha os dados à mão.'; return; }
+    $('o-nome').value = r.nome || ''; $('o-cargo').value = r.cargo || '';
+    const un = unidadeSigla(r.unidade); if (un) $('o-un').value = un;
+    $('o-area').value = $('o-area').value || r.gerencia || ''; $('o-setor').value = $('o-setor').value || r.supervisao || '';
+    gerAtivos = r.gerencia || null;
+    const g = acharGerencia(r.gerencia, un);
+    if (g) { $('o-ger').value = g.id; origem = 'ativos'; }
+    info.textContent = '✓ ' + [r.cargo, r.gerencia, r.supervisao].filter(Boolean).join(' · ') + (g ? '' : ' (gerência não reconhecida: escolha à mão)');
+  };
+  $('o-salvar').onclick = async () => {
+    const erro = t => { $('m-erro').textContent = t; };
+    const data = $('o-data').value, mat = $('o-mat').value.replace(/\D/g, ''), nome = $('o-nome').value.trim();
+    if (!data) return erro('Informe a data da ocorrência.');
+    if (!mat && !nome && $('o-tipo').value === 'Acidente') return erro('Informe a matrícula ou o nome do colaborador acidentado.');
+    if (!$('o-class').value) return erro('Escolha a classificação.');
+    if (!$('o-ger').value) return erro('Escolha a gerência.');
+    if (!$('o-un').value) return erro('Escolha a unidade.');
+    const dados = {
+      data, matricula: mat || null, nome: nome || null, cargo: $('o-cargo').value.trim() || null, unidade: $('o-un').value,
+      tipo_colaborador: $('o-tipocol').value, area: $('o-area').value.trim() || null, setor: $('o-setor').value.trim() || null,
+      tipo_ocorrencia: $('o-tipo').value, classificacao: $('o-class').value, deflator: $('o-defl').value === '1',
+      relato: $('o-relato').value.trim() || null, gerencia_id: Number($('o-ger').value), gerencia_origem: origem || 'manual', gerencia_ativos: gerAtivos,
+      atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO()
+    };
+    const btn = $('o-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
+    let error;
+    if (editando) ({ error } = await sb.from('acidentes').update(dados).eq('id', a.id));
+    else {
+      if (a?.comunicado_codigo) dados.comunicado_codigo = a.comunicado_codigo;
+      dados.chave = a?.comunicado_codigo ? 'COM|' + a.comunicado_codigo : data + '|' + (mat || norm(nome)) + '|' + Date.now().toString(36);
+      ({ error } = await sb.from('acidentes').insert(dados));
+    }
+    if (error) { btn.disabled = false; btn.textContent = 'Tentar de novo'; return erro('Não salvou: ' + error.message); }
+    fecharModal(); toast(editando ? 'Ocorrência atualizada' : a?._novo ? 'Comunicado classificado' : 'Ocorrência cadastrada'); mesSel = data.slice(0, 7); carregar();
+  };
+  if ($('o-excluir')) $('o-excluir').onclick = async () => {
+    if (!confirm('Excluir esta ocorrência? A investigação registrada nela também será apagada.')) return;
+    const { error } = await sb.from('acidentes').delete().eq('id', a.id);
+    if (error) { $('m-erro').textContent = 'Não excluiu: ' + error.message; return; }
+    fecharModal(); toast('Ocorrência excluída'); carregar();
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Comunicados a classificar
+// ─────────────────────────────────────────────────────────────
+const cc = (o, nomes) => { for (const n of nomes) { const k = Object.keys(o).find(x => norm(x) === norm(n)); if (k && o[k] !== '' && o[k] != null) return o[k]; } return ''; };
+async function carregarComunicados() {
+  if (!COMUNICADOS_URL || !COMUNICADOS_CHAVE) { comunicadosErro = 'config'; atualizarBadge(); return; }
+  try {
+    const url = COMUNICADOS_URL + '?acao=comunicados&chave=' + encodeURIComponent(COMUNICADOS_CHAVE) + '&desde=' + INICIO_CONTROLE;
+    const r = await fetch(url); const j = await r.json();
+    if (j.erro) throw new Error(j.erro);
+    comunicados = j.comunicados || []; comunicadosErro = '';
+  } catch (e) { comunicadosErro = e.message || String(e); comunicados = []; }
+  atualizarBadge();
+  if (!$('aba-com').classList.contains('hidden')) renderComunicados();
+}
+function comunicadosPendentes() {
+  const feitos = new Set(acidentes.map(a => a.comunicado_codigo).filter(Boolean));
+  return comunicados.filter(c => !feitos.has(String(cc(c, ['Código']))))
+    .sort((a, b) => String(cc(a, ['Data'])).localeCompare(String(cc(b, ['Data']))));
+}
+function atualizarBadge() { const n = comunicadosPendentes().length; $('badge-com').textContent = n ? n : ''; }
+function renderComunicados() {
+  const el = $('lista-com');
+  if (comunicadosErro === 'config') { el.innerHTML = '<div class="vazio">Falta ligar a planilha dos comunicados: preencha COMUNICADOS_URL e COMUNICADOS_CHAVE no início do código desta tela.</div>'; return; }
+  if (comunicadosErro) { el.innerHTML = `<div class="vazio">Não consegui ler os comunicados: ${esc(comunicadosErro)}</div>`; return; }
+  const u = $('f-unid').value;
+  const lista = comunicadosPendentes().filter(c => !u || unidadeSigla(cc(c, ['Unidade'])) === u);
+  if (!lista.length) { el.innerHTML = '<div class="vazio">Nenhum comunicado esperando classificação. 👍</div>'; return; }
+  el.innerHTML = lista.map((c, i) => {
+    const tipo = cc(c, ['Tipo']);
+    const local = [cc(c, ['Item', 'Local / Frente', 'Local']), cc(c, ['Setor'])].filter(Boolean).join(' · ');
+    const extra = [cc(c, ['Parte do corpo', 'Parte do Corpo']), cc(c, ['Lado']), cc(c, ['Status do atendimento', 'Tratamento', 'Atendimento'])].filter(Boolean).join(' · ');
+    return `<article class="com-card">
+      <div class="l1"><h4>${esc(cc(c, ['Código']))} · ${fmtData(String(cc(c, ['Data'])))}${cc(c, ['Hora']) ? ' ' + esc(cc(c, ['Hora'])) : ''}</h4>
+        <span class="tag ${norm(tipo) === 'ACIDENTE' ? 't-nok' : 't-pend'}">${esc(tipo || '—')}</span>
+        ${cc(c, ['Classificação']) ? `<span class="tag t-neutro">${esc(cc(c, ['Classificação']))}</span>` : ''}
+        <span style="font-size:13px;color:var(--muted)">${esc(unidadeSigla(cc(c, ['Unidade'])))}${cc(c, ['Turno']) ? ' · turno ' + esc(cc(c, ['Turno'])) : ''}</span></div>
+      <div class="meta">${esc(local)}${cc(c, ['Gerência', 'Gerencia']) ? ' · ' + esc(cc(c, ['Gerência', 'Gerencia'])) : ''}${extra ? ' · ' + esc(extra) : ''}</div>
+      <div class="rel">${esc(semTags(cc(c, ['Descrição', 'Descricao'])))}</div>
+      <div class="l2" style="margin-top:8px"><button class="btn btn-primario" style="margin-left:auto" onclick="classificarComunicado(${i})">Classificar</button></div>
+    </article>`;
+  }).join('');
+  window._listaCom = lista;
+}
+function classificarComunicado(i) { const c = (window._listaCom || [])[i]; if (c) abrirOcorrencia(null, c); }
 
 // ─────────────────────────────────────────────────────────────
 // Importação: planilha de acidentes (SharePoint) + ATIVOS (gerência pela matrícula)
@@ -450,7 +630,7 @@ async function lerArquivos() {
       const reg = {
         chave, data, unidade, diretoria: col(l, ['DIRETORIA']), area: col(l, ['AREAS', 'ÁREAS', 'AREA']), setor: (col(l, ['SETOR']) || '').toString().trim() || null,
         tipo_ocorrencia: col(l, ['TIPO DE OCORRÊNCIA']), classificacao: col(l, ['CLASSIFICAÇÃO OCORRÊNCIA', 'CLASSIFICACAO OCORRENCIA']),
-        relato: col(l, ['BREVE RELATO']), matricula: mat || null, nome: nome || null, cargo: col(l, ['CARGO']),
+        relato: semTags(col(l, ['BREVE RELATO'])) || null, matricula: mat || null, nome: semTags(nome) || null, cargo: col(l, ['CARGO']),
         tipo_colaborador: col(l, ['TIPO COLABORADOR']), deflator: norm(col(l, ['DEFLATOR'])) === 'SIM', status_planilha: col(l, ['INVESTIGAÇÃO', 'INVESTIGACAO']),
         gerencia_ativos: gerTxt || null, _ger: g ? g.id : null
       };
