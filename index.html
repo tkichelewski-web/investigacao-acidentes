@@ -105,6 +105,10 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
 .com-card .l1{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
 .com-card h4{margin:0;font-size:15px}
 .com-card .meta{font-size:13px;color:var(--muted);margin:4px 0 6px}
+.colab{border:1px solid var(--linha);border-radius:8px;padding:10px 14px;margin-bottom:14px;background:#F7FAF4}
+.colab summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--verde)}
+.colab summary small{font-weight:400;color:var(--muted)}
+.colab[open] summary{margin-bottom:10px}
 .secao-inv{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linha);font-size:13px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:.05em}
 .comite-campos{border:none;margin:0;padding:0;min-width:0}
 .comite-campos:disabled input,.comite-campos:disabled select,.comite-campos:disabled textarea{background:#F2F5F0;color:var(--muted);cursor:not-allowed}
@@ -441,23 +445,26 @@ function abrirOcorrencia(id, com) {
   const classAtual = a?.classificacao || '';
   abrirModal(`
     <h3>${editando ? 'Editar ocorrência' : a?._novo ? 'Classificar comunicado ' + esc(a.comunicado_codigo) : 'Nova ocorrência'}</h3>
-    <p class="desc">Digite a matrícula: nome, cargo, unidade e gerência vêm do ATIVOS (atualizado todo dia). Para terceiros, preencha à mão.</p>
+    <p class="desc">Para o IP bastam a data, a gerência, a classificação e o deflator. Os dados do colaborador são opcionais.</p>
     <div class="linha2">
       <div class="campo"><label for="o-data">Data da ocorrência</label><input type="date" id="o-data" max="${hojeISO()}" value="${a?.data || ''}"></div>
-      <div class="campo"><label for="o-tipocol">Colaborador</label>
-        <select id="o-tipocol"><option ${!a || norm(a.tipo_colaborador) !== 'TERCEIRO' ? 'selected' : ''}>Próprio</option><option ${norm(a?.tipo_colaborador) === 'TERCEIRO' ? 'selected' : ''}>Terceiro</option></select></div>
-    </div>
-    <div class="linha2">
-      <div class="campo"><label for="o-mat">Matrícula</label><input id="o-mat" inputmode="numeric" value="${esc(a?.matricula || '')}" placeholder="Ex.: 20021665">
-        <span class="ajuda" id="o-ativos-info"></span></div>
-      <div class="campo"><label for="o-nome">Nome do colaborador</label><input id="o-nome" value="${esc(semTags(a?.nome))}"></div>
-    </div>
-    <div class="linha2">
-      <div class="campo"><label for="o-cargo">Cargo</label><input id="o-cargo" value="${esc(a?.cargo || '')}"></div>
       <div class="campo"><label for="o-un">Unidade</label><select id="o-un"><option value="">—</option><option ${unidadeSigla(a?.unidade) === 'JB' ? 'selected' : ''}>JB</option><option ${unidadeSigla(a?.unidade) === 'PB' ? 'selected' : ''}>PB</option></select></div>
     </div>
+    <details class="colab" ${a?.matricula || a?.nome ? 'open' : ''}>
+      <summary>Dados do colaborador <small>(opcional)</small></summary>
+      <div class="linha2">
+        <div class="campo"><label for="o-mat">Matrícula</label><input id="o-mat" inputmode="numeric" value="${esc(a?.matricula || '')}" placeholder="Ex.: 20021665">
+        <span class="ajuda" id="o-ativos-info"></span></div>
+        <div class="campo"><label for="o-nome">Nome do colaborador</label><input id="o-nome" value="${esc(semTags(a?.nome))}"></div>
+      </div>
+      <div class="linha2">
+        <div class="campo"><label for="o-cargo">Cargo</label><input id="o-cargo" value="${esc(a?.cargo || '')}"></div>
+        <div class="campo"><label for="o-tipocol">Colaborador</label>
+        <select id="o-tipocol"><option ${!a || norm(a.tipo_colaborador) !== 'TERCEIRO' ? 'selected' : ''}>Próprio</option><option ${norm(a?.tipo_colaborador) === 'TERCEIRO' ? 'selected' : ''}>Terceiro</option></select></div>
+      </div>
+    </details>
     <div class="campo"><label for="o-ger">Gerência (onde conta no IP)</label><select id="o-ger">${opcoesGer(a?.gerencia_id)}</select>
-      <span class="ajuda">Colaborador emprestado a outra área? Escolha a gerência onde ocorreu.</span></div>
+      <span class="ajuda">Vem do local do comunicado (ou do ATIVOS, se informar a matrícula). Troque se a ocorrência deve contar em outra gerência.</span></div>
     <div class="linha2">
       <div class="campo"><label for="o-area">Área / local</label><input id="o-area" value="${esc(a?.area || '')}"></div>
       <div class="campo"><label for="o-setor">Setor</label><input id="o-setor" value="${esc(a?.setor || '')}"></div>
@@ -501,7 +508,6 @@ function abrirOcorrencia(id, com) {
     const erro = t => { $('m-erro').textContent = t; };
     const data = $('o-data').value, mat = $('o-mat').value.replace(/\D/g, ''), nome = $('o-nome').value.trim();
     if (!data) return erro('Informe a data da ocorrência.');
-    if (!mat && !nome && $('o-tipo').value === 'Acidente') return erro('Informe a matrícula ou o nome do colaborador acidentado.');
     if (!$('o-class').value) return erro('Escolha a classificação.');
     if (!$('o-ger').value) return erro('Escolha a gerência.');
     if (!$('o-un').value) return erro('Escolha a unidade.');
