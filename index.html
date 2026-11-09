@@ -335,7 +335,8 @@ function renderLista() {
   const opcoesGer = sel => '<option value="">— escolha a gerência —</option>' + gerencias.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(nomeGer(g))}</option>`).join('');
   $('lista').innerHTML = '<div class="lista">' + mostrar.sort((a, b) => a.data.localeCompare(b.data)).map(a => {
     const p = prazoInfo(a), c = comiteOk(a);
-    const cls = !contaNoIP(a) ? 'fora' : (c && p.ok ? 'ok' : (p.cls === 't-nok' || (a.inv_responsavel && !c) ? 'nok' : ''));
+    const cls = !contaNoIP(a) || naoInvestiga(a.classificacao) ? 'fora' : (c && p.ok ? 'ok' : (p.cls === 't-nok' || (a.inv_responsavel && !c) ? 'nok' : ''));
+    const semInv = naoInvestiga(a.classificacao);
     const comiteInformado = a.inv_comite_conforme === true || a.inv_comite_conforme === false || !!a.inv_responsavel;
     const tagCom = comiteInformado ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não informado</span>';
     return `<article class="oc ${cls}">
@@ -350,10 +351,10 @@ function renderLista() {
         ${a.gerencia_origem === 'manual' ? '<span class="tag t-neutro">escolhida à mão</span>' : a.gerencia_ativos ? `<span class="tag t-neutro" title="Texto no ATIVOS">ATIVOS: ${esc(a.gerencia_ativos)}</span>` : ''}
       </div>
       <div class="l2" style="margin-top:8px">
-        ${tagCom}<span class="tag ${p.cls}">${esc(p.txt)}</span>
+        ${semInv ? '<span class="tag t-neutro">Não exige investigação</span>' : `${tagCom}<span class="tag ${p.cls}">${esc(p.txt)}</span>`}
         ${a.inv_relatorio_url ? `<a class="btn-link" href="${esc(a.inv_relatorio_url)}" target="_blank" rel="noopener">Relatório</a>` : ''}
         <button class="btn btn-link" style="margin-left:auto" onclick="abrirOcorrencia(${a.id})">Editar ocorrência</button>
-        <button class="btn btn-sec" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao ? 'Ver / editar investigação' : 'Registrar investigação'}</button>
+        ${semInv ? '' : `<button class="btn btn-sec" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao || a.inv_comite_conforme != null ? 'Ver / editar investigação' : 'Registrar investigação'}</button>`}
       </div></article>`;
   }).join('') + '</div>';
 }
@@ -413,7 +414,9 @@ function abrirInvestigacao(id) {
 // Cadastro da ocorrência direto na tela (o colaborador vem do ATIVOS do Supabase)
 // ─────────────────────────────────────────────────────────────
 const CLASSIFICACOES = ['ASA (PRIMEIROS SOCORROS)', 'ASA (TRATAMENTO MÉDICO)', 'ASA (TRABALHO RESTRITO)', 'ACA (AFASTAMENTO)', 'FATALIDADE',
-  'INCIDENTE DE ALTO POTENCIAL', 'ACIDENTE AMBIENTAL DE BAIXA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE MÉDIA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE GRANDE PROPORÇÃO', 'TRAJETO'];
+  'INCIDENTE DE ALTO POTENCIAL', 'INCIDENTE DE MÉDIO POTENCIAL', 'INCIDENTE DE BAIXO POTENCIAL', 'NÃO INVESTIGÁVEL', 'ACIDENTE AMBIENTAL DE BAIXA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE MÉDIA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE GRANDE PROPORÇÃO', 'TRAJETO'];
+// Pelo procedimento (nota 5 e item 4.3), só o incidente de ALTO potencial precisa ser investigado
+const naoInvestiga = c => /MEDIO POTENCIAL|BAIXO POTENCIAL|NAO INVESTIGAVEL/.test(norm(c));
 const unidadeSigla = u => { const n = norm(u); return n.includes('JABOTICABAL') || n === 'JB' ? 'JB' : n.includes('PEREIRA') || n === 'PB' ? 'PB' : (u || ''); };
 async function buscarNoAtivos(mat) {
   const m = String(mat || '').replace(/\D/g, ''); if (!m) return null;
@@ -467,14 +470,20 @@ function abrirOcorrencia(id, com) {
     </div>
     <div class="campo"><label for="o-defl">Conta como deflator?</label>
       <select id="o-defl"><option value="1" ${!a || a.deflator ? 'selected' : ''}>Sim</option><option value="0" ${a && !a.deflator ? 'selected' : ''}>Não</option></select>
-      <span class="ajuda">Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.</span></div>
+      <span class="ajuda" id="o-defl-nota">Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.</span></div>
     <div class="campo"><label for="o-relato">Breve relato</label><textarea id="o-relato" rows="3">${esc(semTags(a?.relato))}</textarea></div>
     <div id="m-erro" class="erro-form"></div>
     <div class="rodape">
       ${editando ? '<button class="btn btn-link" id="o-excluir" style="margin-right:auto;color:var(--erro)">Excluir ocorrência</button>' : ''}
       <button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="o-salvar">${editando ? 'Salvar' : 'Salvar ocorrência'}</button></div>`);
   let gerAtivos = a?.gerencia_ativos || null, origem = a?.gerencia_origem || null;
-  $('o-class').onchange = () => { const c = norm($('o-class').value); if (c.includes('TRAJETO')) $('o-defl').value = '0'; };
+  const syncDefl = () => {
+    const c = norm($('o-class').value), sem = naoInvestiga(c);
+    if (c.includes('TRAJETO') || sem) $('o-defl').value = '0';
+    $('o-defl').disabled = sem;
+    $('o-defl-nota').textContent = sem ? 'Incidente de médio/baixo potencial ou não investigável: não exige investigação e não entra no IP.' : 'Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.';
+  };
+  $('o-class').onchange = syncDefl; syncDefl();
   $('o-ger').onchange = () => { origem = 'manual'; };
   $('o-mat').onchange = async () => {
     const info = $('o-ativos-info'); info.textContent = 'Procurando no ATIVOS...';
@@ -499,7 +508,7 @@ function abrirOcorrencia(id, com) {
     const dados = {
       data, matricula: mat || null, nome: nome || null, cargo: $('o-cargo').value.trim() || null, unidade: $('o-un').value,
       tipo_colaborador: $('o-tipocol').value, area: $('o-area').value.trim() || null, setor: $('o-setor').value.trim() || null,
-      tipo_ocorrencia: $('o-tipo').value, classificacao: $('o-class').value, deflator: $('o-defl').value === '1',
+      tipo_ocorrencia: $('o-tipo').value, classificacao: $('o-class').value, deflator: !naoInvestiga($('o-class').value) && $('o-defl').value === '1',
       relato: $('o-relato').value.trim() || null, gerencia_id: Number($('o-ger').value), gerencia_origem: origem || 'manual', gerencia_ativos: gerAtivos,
       atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO()
     };
@@ -570,6 +579,7 @@ function renderComunicados() {
         ${desc ? `<span class="tag t-neutro">Descartado: ${esc(desc.motivo)}${desc.descartado_por ? ' · ' + esc(desc.descartado_por) : ''}</span>
           <button class="btn btn-sec" style="margin-left:auto" onclick="restaurarComunicado(${i})">Restaurar</button>`
         : `<button class="btn btn-primario" onclick="classificarComunicado(${i})">Classificar</button>
+          ${norm(tipo) === 'INCIDENTE' ? `<button class="btn btn-sec" onclick="naoInvestigavel(${i})" title="Registra como ocorrência que não exige investigação">Não investigável</button>` : ''}
           <button class="btn btn-link" style="color:var(--erro)" onclick="descartarComunicado(${i})">Descartar</button>`}
       </div>
     </article>`;
@@ -577,6 +587,22 @@ function renderComunicados() {
   window._listaCom = lista;
 }
 function classificarComunicado(i) { const c = (window._listaCom || [])[i]; if (c) abrirOcorrencia(null, c); }
+// Incidente que não exige investigação: vira ocorrência direto, sem deflator
+async function naoInvestigavel(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código'])), un = unidadeSigla(cc(c, ['Unidade']));
+  const g = acharGerencia(cc(c, ['Gerência', 'Gerencia']), un);
+  if (!g) { toast('Não reconheci a gerência do local. Use Classificar e escolha a gerência.', true); return abrirOcorrencia(null, c); }
+  if (!confirm(`Registrar ${codigo} como incidente NÃO INVESTIGÁVEL?\n\nEle sai desta lista, fica nas Ocorrências e não entra no IP.`)) return;
+  const dados = { chave: 'COM|' + codigo, comunicado_codigo: codigo, data: String(cc(c, ['Data'])).slice(0, 10), unidade: un,
+    area: [cc(c, ['Item', 'Local / Frente', 'Local']), cc(c, ['Complemento do local'])].filter(Boolean).join(' — ') || null,
+    setor: cc(c, ['Setor', 'Supervisão']) || null, tipo_ocorrencia: 'Incidente', classificacao: 'NÃO INVESTIGÁVEL', deflator: false,
+    relato: semTags(cc(c, ['Descrição', 'Descricao'])) || null, gerencia_id: g.id, gerencia_origem: 'comunicado',
+    atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO() };
+  const { error } = await sb.from('acidentes').insert(dados);
+  if (error) { toast('Não salvou: ' + error.message, true); return; }
+  toast(codigo + ' registrado como não investigável'); carregar();
+}
 function descartarComunicado(i) {
   const c = (window._listaCom || [])[i]; if (!c) return;
   const codigo = String(cc(c, ['Código']));
