@@ -155,6 +155,7 @@ main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
 
   <section id="aba-com" class="hidden">
     <p class="legenda">Comunicados de acidente e incidente enviados pelo formulário, a partir de outubro/2026, que ainda não foram classificados. Clique em <b>Classificar</b>: informe o colaborador, a classificação e se é deflator. Depois disso o comunicado vira uma ocorrência na aba <b>Ocorrências</b>.</p>
+    <label class="chk" style="margin:0 0 10px;display:inline-flex"><input type="checkbox" id="f-ver-desc" onchange="verDescartados=this.checked;renderComunicados()"> mostrar os descartados</label>
     <div id="lista-com"><div class="carregando">Carregando os comunicados...</div></div>
   </section>
 
@@ -191,7 +192,7 @@ const contaNoIP = a => a.deflator && a.data >= INICIO_CONTROLE;
 // Comunicados de ocorrência (Google Planilhas / Apps Script do formulário de comunicado)
 const COMUNICADOS_URL = 'https://script.google.com/macros/s/AKfycbxoBjqY-IXjUx04kD9BUSOUgBLpShui5_y3tvM_dpnzGKmQcr1KhDR4_rhKn3kWq-bzkQ/exec';  // App da Web do formulário de comunicado
 const COMUNICADOS_CHAVE = 'SSMAD3C85069E026';  // igual à CHAVE_LEITURA_IP do Código.gs
-let comunicados = [], comunicadosErro = '';
+let comunicados = [], comunicadosErro = '', descartados = new Map(), verDescartados = false;
 const NIVEIS = ['Supervisor', 'Coordenador', 'Gerente', 'Diretor', 'Outro'];
 const MESES_SAFRA = [['04','Abr'],['05','Mai'],['06','Jun'],['07','Jul'],['08','Ago'],['09','Set'],['10','Out'],['11','Nov'],['12','Dez'],['01','Jan'],['02','Fev'],['03','Mar']];
 const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -532,13 +533,15 @@ async function carregarComunicados() {
     const r = await fetch(url); const j = await r.json();
     if (j.erro) throw new Error(j.erro);
     comunicados = j.comunicados || []; comunicadosErro = '';
+    const rd = await sb.from('comunicados_descartados').select('*');
+    descartados = new Map((rd.data || []).map(d => [d.codigo, d]));
   } catch (e) { comunicadosErro = e.message || String(e); comunicados = []; }
   atualizarBadge();
   if (!$('aba-com').classList.contains('hidden')) renderComunicados();
 }
 function comunicadosPendentes() {
   const feitos = new Set(acidentes.map(a => a.comunicado_codigo).filter(Boolean));
-  return comunicados.filter(c => !feitos.has(String(cc(c, ['Código']))))
+  return comunicados.filter(c => !feitos.has(String(cc(c, ['Código']))) && !descartados.has(String(cc(c, ['Código']))))
     .sort((a, b) => String(cc(a, ['Data'])).localeCompare(String(cc(b, ['Data']))));
 }
 function atualizarBadge() { const n = comunicadosPendentes().length; $('badge-com').textContent = n ? n : ''; }
@@ -547,25 +550,62 @@ function renderComunicados() {
   if (comunicadosErro === 'config') { el.innerHTML = '<div class="vazio">Falta ligar a planilha dos comunicados: preencha COMUNICADOS_URL e COMUNICADOS_CHAVE no início do código desta tela.</div>'; return; }
   if (comunicadosErro) { el.innerHTML = `<div class="vazio">Não consegui ler os comunicados: ${esc(comunicadosErro)}</div>`; return; }
   const u = $('f-unid').value;
-  const lista = comunicadosPendentes().filter(c => !u || unidadeSigla(cc(c, ['Unidade'])) === u);
+  const feitos = new Set(acidentes.map(a => a.comunicado_codigo).filter(Boolean));
+  const base = verDescartados ? comunicados.filter(c => !feitos.has(String(cc(c, ['Código'])))) : comunicadosPendentes();
+  const lista = base.filter(c => !u || unidadeSigla(cc(c, ['Unidade'])) === u);
   if (!lista.length) { el.innerHTML = '<div class="vazio">Nenhum comunicado esperando classificação. 👍</div>'; return; }
   el.innerHTML = lista.map((c, i) => {
     const tipo = cc(c, ['Tipo']);
     const local = [cc(c, ['Item', 'Local / Frente', 'Local']), cc(c, ['Setor'])].filter(Boolean).join(' · ');
     const extra = [cc(c, ['Parte do corpo', 'Parte do Corpo']), cc(c, ['Lado']), cc(c, ['Status do atendimento', 'Tratamento', 'Atendimento'])].filter(Boolean).join(' · ');
-    return `<article class="com-card">
+    const desc = descartados.get(String(cc(c, ['Código'])));
+    return `<article class="com-card" style="${desc ? 'opacity:.6;border-left-color:#C9D3CC' : ''}">
       <div class="l1"><h4>${esc(cc(c, ['Código']))} · ${fmtData(String(cc(c, ['Data'])))}${cc(c, ['Hora']) ? ' ' + esc(cc(c, ['Hora'])) : ''}</h4>
         <span class="tag ${norm(tipo) === 'ACIDENTE' ? 't-nok' : 't-pend'}">${esc(tipo || '—')}</span>
         ${cc(c, ['Classificação']) ? `<span class="tag t-neutro">${esc(cc(c, ['Classificação']))}</span>` : ''}
         <span style="font-size:13px;color:var(--muted)">${esc(unidadeSigla(cc(c, ['Unidade'])))}${cc(c, ['Turno']) ? ' · turno ' + esc(cc(c, ['Turno'])) : ''}</span></div>
       <div class="meta">${esc(local)}${cc(c, ['Gerência', 'Gerencia']) ? ' · ' + esc(cc(c, ['Gerência', 'Gerencia'])) : ''}${extra ? ' · ' + esc(extra) : ''}</div>
       <div class="rel">${esc(semTags(cc(c, ['Descrição', 'Descricao'])))}</div>
-      <div class="l2" style="margin-top:8px"><button class="btn btn-primario" style="margin-left:auto" onclick="classificarComunicado(${i})">Classificar</button></div>
+      <div class="l2" style="margin-top:8px">
+        ${desc ? `<span class="tag t-neutro">Descartado: ${esc(desc.motivo)}${desc.descartado_por ? ' · ' + esc(desc.descartado_por) : ''}</span>
+          <button class="btn btn-sec" style="margin-left:auto" onclick="restaurarComunicado(${i})">Restaurar</button>`
+        : `<button class="btn btn-primario" onclick="classificarComunicado(${i})">Classificar</button>
+          <button class="btn btn-link" style="color:var(--erro)" onclick="descartarComunicado(${i})">Descartar</button>`}
+      </div>
     </article>`;
   }).join('');
   window._listaCom = lista;
 }
 function classificarComunicado(i) { const c = (window._listaCom || [])[i]; if (c) abrirOcorrencia(null, c); }
+function descartarComunicado(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código']));
+  abrirModal(`
+    <h3>Descartar comunicado ${esc(codigo)}</h3>
+    <p class="desc">O comunicado some da lista e não vira ocorrência. A planilha do Google não é alterada, e dá para restaurar depois em "mostrar os descartados".</p>
+    <div class="campo"><label for="d-motivo">Motivo</label>
+      <select id="d-motivo"><option>Teste da plataforma</option><option>Comunicado duplicado</option><option>Não é acidente nem incidente</option><option>Outro</option></select></div>
+    <div class="campo" id="d-outro-wrap" style="display:none"><label for="d-outro">Descreva o motivo</label><input id="d-outro"></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="d-ok" style="background:var(--erro)">Descartar</button></div>`);
+  $('d-motivo').onchange = () => { $('d-outro-wrap').style.display = $('d-motivo').value === 'Outro' ? '' : 'none'; };
+  $('d-ok').onclick = async () => {
+    const motivo = $('d-motivo').value === 'Outro' ? $('d-outro').value.trim() : $('d-motivo').value;
+    if (!motivo) { $('m-erro').textContent = 'Descreva o motivo.'; return; }
+    const reg = { codigo, motivo, descartado_por: quem().nome };
+    const { error } = await sb.from('comunicados_descartados').upsert(reg, { onConflict: 'codigo' });
+    if (error) { $('m-erro').textContent = 'Não descartou: ' + error.message + (String(error.message).includes('comunicados_descartados') ? ' (rode o SQL comunicados_descartados.sql)' : ''); return; }
+    descartados.set(codigo, reg); fecharModal(); toast('Comunicado descartado'); atualizarBadge(); renderComunicados();
+  };
+}
+async function restaurarComunicado(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código']));
+  if (!confirm('Restaurar o comunicado ' + codigo + ' para a lista de classificação?')) return;
+  const { error } = await sb.from('comunicados_descartados').delete().eq('codigo', codigo);
+  if (error) { toast('Não restaurou: ' + error.message, true); return; }
+  descartados.delete(codigo); toast('Comunicado restaurado'); atualizarBadge(); renderComunicados();
+}
 
 // ─────────────────────────────────────────────────────────────
 // Importação: planilha de acidentes (SharePoint) + ATIVOS (gerência pela matrícula)
