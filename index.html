@@ -212,6 +212,8 @@ function regra(a) {
   return { prazo: grave ? 15 : 7, nivel: grave ? 'GERENTE' : 'SUPERVISOR', rotuloNivel: grave ? 'Gerente de área' : 'Supervisor de área' };
 }
 function comiteOk(a) {
+  // Resposta direta da baixa ("comitê conforme o procedimento?"); sem ela, regra antiga pelos campos do comitê
+  if (a.inv_comite_conforme === true || a.inv_comite_conforme === false) return a.inv_comite_conforme;
   const r = regra(a), n = norm(a.inv_responsavel_nivel);
   const nivelOk = ['GERENTE', 'DIRETOR'].includes(n) || (r.nivel === 'SUPERVISOR' && ['SUPERVISOR', 'COORDENADOR'].includes(n));
   return !!(a.inv_responsavel && a.inv_cipa && nivelOk);
@@ -313,7 +315,8 @@ function renderLista() {
   $('lista').innerHTML = '<div class="lista">' + mostrar.sort((a, b) => a.data.localeCompare(b.data)).map(a => {
     const p = prazoInfo(a), c = comiteOk(a);
     const cls = !contaNoIP(a) ? 'fora' : (c && p.ok ? 'ok' : (p.cls === 't-nok' || (a.inv_responsavel && !c) ? 'nok' : ''));
-    const tagCom = a.inv_responsavel ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não registrado</span>';
+    const comiteInformado = a.inv_comite_conforme === true || a.inv_comite_conforme === false || !!a.inv_responsavel;
+    const tagCom = comiteInformado ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não informado</span>';
     return `<article class="oc ${cls}">
       <div class="l1"><h4>${fmtData(a.data)} · ${esc(a.nome || '(sem nome)')}</h4>
         <span class="tag t-neutro">${esc(a.classificacao || 'Sem classificação')}</span>
@@ -343,28 +346,16 @@ async function trocarGerencia(id, valor) {
 
 function abrirInvestigacao(id) {
   const a = acidentes.find(x => x.id === id); if (!a) return;
-  // Comitê já registrado: fica travado; na baixa só entram conclusão, link e observações
-  const comiteTravado = !!(a.inv_responsavel && a.inv_responsavel_nivel && a.inv_cipa !== null && a.inv_cipa !== undefined);
+  // Comitê: só a confirmação (os nomes já estão na apresentação da investigação)
+  const comitePre = (a.inv_comite_conforme === true || a.inv_comite_conforme === false) ? a.inv_comite_conforme : (a.inv_responsavel ? comiteOk(a) : null);
   const r = regra(a), limite = somaDias(a.data, r.prazo);
   abrirModal(`
     <h3>Investigação da ocorrência</h3>
     <p class="desc">${fmtData(a.data)} · ${esc(a.nome || '')} · ${esc(a.classificacao || 'Sem classificação')}</p>
     <div class="regra">Pelo procedimento: responsável <b>${r.rotuloNivel}</b>, ao menos <b>1 membro da CIPA/CIPATR</b> no comitê, e análise concluída em até <b>${r.prazo} dias</b> (até ${fmtData(limite)}).${a.status_planilha ? `<br>Status na planilha: ${esc(a.status_planilha)}` : ''}</div>
-    <div class="secao-inv"><span>1 · Comitê de investigação</span>${comiteTravado ? '<button type="button" class="btn-link" id="i-alterar">Alterar comitê</button>' : ''}</div>
-    <fieldset id="i-comite" class="comite-campos" ${comiteTravado ? 'disabled' : ''}>
-    <div class="linha2">
-      <div class="campo"><label for="i-resp">Responsável pela análise</label><input id="i-resp" value="${esc(a.inv_responsavel || '')}" placeholder="Nome"></div>
-      <div class="campo"><label for="i-nivel">Cargo do responsável</label>
-        <select id="i-nivel"><option value="">—</option>${NIVEIS.map(n => `<option ${a.inv_responsavel_nivel === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-    </div>
-    <div class="linha2">
-      <div class="campo"><label for="i-cipa">Membro da CIPA/CIPATR no comitê?</label>
-        <select id="i-cipa"><option value="">—</option><option value="1" ${a.inv_cipa === true ? 'selected' : ''}>Sim</option><option value="0" ${a.inv_cipa === false ? 'selected' : ''}>Não</option></select></div>
-      <div class="campo"><label for="i-cipanome">Nome do membro da CIPA</label><input id="i-cipanome" value="${esc(a.inv_cipa_nome || '')}"></div>
-    </div>
-    <div class="campo"><label for="i-part">Demais participantes do comitê</label><textarea id="i-part">${esc(a.inv_participantes || '')}</textarea></div>
-    </fieldset>
-    <div class="secao-inv"><span>2 · Baixa da investigação</span></div>
+    <div class="campo"><label for="i-comite-ok">Comitê formado conforme o procedimento?</label>
+      <select id="i-comite-ok"><option value="">—</option><option value="1" ${comitePre === true ? 'selected' : ''}>Sim</option><option value="0" ${comitePre === false ? 'selected' : ''}>Não</option></select>
+      <span class="ajuda">Confira na apresentação da investigação: responsável ${r.rotuloNivel.toLowerCase()} e ao menos 1 membro da CIPA/CIPATR.</span></div>
     <div class="linha2">
       <div class="campo"><label for="i-data">Data de conclusão da análise</label><input type="date" id="i-data" min="${a.data}" max="${hojeISO()}" value="${a.inv_data_conclusao || ''}">
         <span class="ajuda">Deixe em branco enquanto a análise não terminar.</span></div>
@@ -375,21 +366,17 @@ function abrirInvestigacao(id) {
     ${a.inv_registrado_por ? `<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px">Registrado por ${esc(a.inv_registrado_por)} em ${fmtData(a.inv_registrado_em)}${a.atualizado_por && a.atualizado_por !== a.inv_registrado_por ? ' · alterado por ' + esc(a.atualizado_por) : ''}</p>` : ''}
     <div id="m-erro" class="erro-form"></div>
     <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="i-salvar">Salvar</button></div>`);
-  if ($('i-alterar')) $('i-alterar').onclick = () => { $('i-comite').disabled = false; $('i-alterar').remove(); $('i-resp').focus(); };
-  const leitura = () => ({ ...a, inv_responsavel: $('i-resp').value.trim() || null, inv_responsavel_nivel: $('i-nivel').value || null,
-    inv_cipa: $('i-cipa').value === '' ? null : $('i-cipa').value === '1', inv_data_conclusao: $('i-data').value || null });
+  const leitura = () => ({ ...a, inv_comite_conforme: $('i-comite-ok').value === '' ? null : $('i-comite-ok').value === '1', inv_data_conclusao: $('i-data').value || null });
   const calc = () => {
     const x = leitura(), p = prazoInfo(x), c = comiteOk(x);
     $('i-calc').innerHTML = `Comitê: <b style="color:${c ? 'var(--verde)' : 'var(--erro)'}">${c ? 'conforme' : 'fora da regra'}</b> · Prazo: <b>${esc(p.txt)}</b>`;
   };
-  ['i-resp', 'i-nivel', 'i-cipa', 'i-data'].forEach(k => { $(k).oninput = calc; $(k).onchange = calc; }); calc();
+  ['i-comite-ok', 'i-data'].forEach(k => { $(k).oninput = calc; $(k).onchange = calc; }); calc();
   $('i-salvar').onclick = async () => {
     const x = leitura(), erro = t => { $('m-erro').textContent = t; };
     if (x.inv_data_conclusao && x.inv_data_conclusao < a.data) return erro('A conclusão não pode ser antes da ocorrência.');
     if (x.inv_data_conclusao && !$('i-rel').value.trim()) return erro('Com a análise concluída, informe o link do relatório.');
-    if (x.inv_cipa && !$('i-cipanome').value.trim()) return erro('Informe o nome do membro da CIPA/CIPATR.');
-    const dados = { inv_responsavel: x.inv_responsavel, inv_responsavel_nivel: x.inv_responsavel_nivel, inv_cipa: x.inv_cipa,
-      inv_cipa_nome: $('i-cipanome').value.trim() || null, inv_participantes: $('i-part').value.trim() || null,
+    const dados = { inv_comite_conforme: x.inv_comite_conforme,
       inv_data_conclusao: x.inv_data_conclusao, inv_relatorio_url: $('i-rel').value.trim() || null, inv_observacoes: $('i-obs').value.trim() || null,
       atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO(),
       ...(a.inv_registrado_por ? {} : { inv_registrado_por: quem().nome, inv_registrado_em: agoraISO() }) };
