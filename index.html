@@ -189,8 +189,8 @@ const ALIASES_GERENCIA = {
 const INICIO_CONTROLE = '2026-10-01';
 const contaNoIP = a => a.deflator && a.data >= INICIO_CONTROLE;
 // Comunicados de ocorrência (Google Planilhas / Apps Script do formulário de comunicado)
-const COMUNICADOS_URL = '';            // cole aqui o endereço do App da Web (termina em /exec)
-const COMUNICADOS_CHAVE = '';          // a mesma CHAVE_LEITURA_IP colocada no Apps Script
+const COMUNICADOS_URL = 'https://script.google.com/macros/s/AKfycbxoBjqY-IXjUx04kD9BUSOUgBLpShui5_y3tvM_dpnzGKmQcr1KhDR4_rhKn3kWq-bzkQ/exec';  // App da Web do formulário de comunicado
+const COMUNICADOS_CHAVE = 'SSMAD3C85069E026';  // igual à CHAVE_LEITURA_IP do Código.gs
 let comunicados = [], comunicadosErro = '';
 const NIVEIS = ['Supervisor', 'Coordenador', 'Gerente', 'Diretor', 'Outro'];
 const MESES_SAFRA = [['04','Abr'],['05','Mai'],['06','Jun'],['07','Jul'],['08','Ago'],['09','Set'],['10','Out'],['11','Nov'],['12','Dez'],['01','Jan'],['02','Fev'],['03','Mar']];
