@@ -1,304 +1,777 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Investigação de Ocorrências SSMA</title>
+<title>Investigação de Acidentes — IP VIDAS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
-/* Sistema interno SSMA: base neutra, verde institucional em navegação/ação, cor forte só em status. Barra global + cabeçalho do registro + trilho de etapas + formulário em seções. */
 :root{
-  color-scheme: light;
-  --brand:#07583C; --brand-hover:#05462F; --brand-tint:#EAF2EE; --brand-line:#B9D2C6;
-  --ink:#1E2924; --muted:#5B6862; --faint:#8A9690;
-  --line:#D6DDD9; --line-strong:#BFC8C3;
-  --surface:#FFFFFF; --canvas:#F2F4F3; --subtle:#F7F8F8;
-  --ok:#2F6B2A; --ok-bg:#EEF6E2; --ok-line:#B3DD64;
-  --warn:#7A4B00; --warn-bg:#FFF5E3; --warn-line:#FDB952;
-  --crit:#A3271B; --crit-bg:#FCEBE9; --crit-line:#DF4636;
-  --info:#1F5C8A;
-  --font-body:"Open Sans",Arial,sans-serif; --font-title:"Bitter",Georgia,serif;
-  --r:3px;
+  --verde:#07583C; --verde-2:#0A6B4A; --lima:#B3DD64; --lima-suave:#EAF5D6; --ambar:#FDB952; --vermelho:#DF4636;
+  --fundo:#F2F5F0; --papel:#FFFFFF; --tinta:#1C2B22; --muted:#5D6F64; --linha:#D5E3CC;
+  --erro:#B42318; --erro-bg:#FCE8E6; --aviso:#9A6B00; --aviso-bg:#FFF4DB; --cinza-bg:#EEF1EE;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{font-family:var(--font-body);font-size:13px;line-height:1.45;color:var(--ink);background:var(--canvas)}
-button,input,select,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
-h1,h2,h3{margin:0;text-wrap:balance}
-.tab-num{font-variant-numeric:tabular-nums}
-a{color:var(--brand)}
+html,body{margin:0}
+body{font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;background:var(--fundo);color:var(--tinta);font-size:15px;line-height:1.5}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--lima);outline-offset:2px}
+.hidden{display:none !important}
 
-/* barra global */
-.appbar{height:48px;background:var(--brand);color:#fff;display:flex;align-items:center;padding:0 16px;gap:18px;position:sticky;top:0;z-index:30}
-.brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
-.brand .org{font-weight:700}
-.brand .sep{width:1px;height:20px;background:rgba(255,255,255,.35)}
-.brand .sys{font-weight:500;opacity:.92}
-.appnav{display:flex;height:100%}
-.appnav a{white-space:nowrap;display:flex;align-items:center;padding:0 14px;color:rgba(255,255,255,.82);text-decoration:none;font-weight:600;border-bottom:3px solid transparent;border-top:3px solid transparent}
-.appnav a:hover{color:#fff;background:rgba(255,255,255,.06)}
-.appnav a.on{color:#fff;border-bottom-color:#B3DD64}
-.appbar .sp{flex:1}
-.hsel{display:flex;align-items:center;gap:6px}
-.hsel label{font-size:11px;opacity:.8}
-.hsel select{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:var(--r);padding:0 6px;height:28px}
-.hsel select option{color:var(--ink)}
-.user{display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid rgba(255,255,255,.25)}
-.avatar{width:28px;height:28px;border-radius:50%;background:#fff;color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
-.user .n{font-weight:600;line-height:1.1;white-space:nowrap}.user .txt{white-space:nowrap}
-@media (max-width:1560px){.brand .sys,.brand .sep{display:none}}
-@media (max-width:1280px){.user .txt{display:none}}.user .p{font-size:11px;opacity:.8}
+header.topo{background:var(--verde);color:#fff;border-bottom:4px solid var(--lima)}
+.topo-inner{max-width:1240px;margin:0 auto;padding:16px 24px;display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap}
+.topo h1{margin:0;font-size:22px;line-height:1.2}
+.topo .sub{color:var(--lima);font-size:14px;font-weight:500}
+.topo .filtros{margin-left:auto;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.topo label{display:block;font-size:12px;color:#CFE6D6;margin-bottom:2px}
+.topo select{background:#0B6546;border:1px solid #2F7F60;color:#fff;border-radius:6px;padding:7px 10px;min-width:140px}
+.usuario-topo{font-size:13px;color:#CFE6D6;align-self:center}
+.usuario-topo b{color:#fff}
+.usuario-topo button{background:none;border:1px solid #2F7F60;color:#fff;border-radius:6px;padding:2px 10px;margin-left:8px;cursor:pointer;font-size:12px}
 
-/* botões */
-.btn{height:30px;padding:0 14px;border-radius:var(--r);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn:hover{background:var(--subtle);border-color:var(--faint)}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.primary:hover{background:var(--brand-hover)}
-.btn.ghost{border-color:transparent;background:transparent;color:var(--brand)}
-.btn.ghost:hover{background:var(--brand-tint)}
-.btn.danger{color:var(--crit);border-color:#E7B4AE}
-.btn.sm{height:26px;padding:0 10px;font-size:12px}
-.btn[disabled]{opacity:.5;cursor:not-allowed}
-.link{color:var(--brand);font-weight:600;text-decoration:none;cursor:pointer;background:none;border:0;padding:0}
-.link:hover{text-decoration:underline}
-.x{background:none;border:0;color:var(--faint);cursor:pointer;width:26px;height:26px;border-radius:var(--r);font-size:15px;line-height:1}
-.x:hover{background:var(--crit-bg);color:var(--crit)}
+main{max-width:1240px;margin:0 auto;padding:20px 24px 60px}
+.abas{display:flex;gap:4px;border-bottom:1px solid var(--linha);margin-bottom:18px;flex-wrap:wrap}
+.aba{padding:8px 14px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px}
+.aba.ativa{color:var(--verde);border-bottom-color:var(--verde)}
 
-/* status e etiquetas */
-.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;white-space:nowrap}
-.status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0}
-.st-elaboracao{color:var(--info)}.st-devolvida{color:var(--warn)}.st-aprovacao{color:#6B4FA0}.st-assinatura{color:var(--warn)}.st-concluida{color:var(--ok)}.st-late{color:var(--crit)}
-.tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:2px;border:1px solid var(--line);background:var(--subtle);color:var(--muted);white-space:nowrap}
-.tag.w{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
-.tag.e{background:var(--crit-bg);border-color:var(--crit-line);color:var(--crit)}
-.tag.o{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok)}
-.tag.g{background:var(--brand-tint);border-color:var(--brand-line);color:var(--brand)}
-.pot{display:inline-block;min-width:64px;text-align:center;font-size:11px;font-weight:700;padding:2px 6px;border-radius:2px;white-space:nowrap}
-.pot.b{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
-.pot.m{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
-.pot.a{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit-line)}
-.pot.n{background:var(--subtle);color:var(--faint);border:1px solid var(--line)}
+.regua{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;margin-bottom:20px;overflow-x:auto}
+.mes{background:var(--papel);border:1px solid var(--linha);border-radius:6px;padding:8px 6px 10px;cursor:pointer;text-align:center;min-width:64px}
+.mes:hover{border-color:var(--verde)}
+.mes .nome{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--verde)}
+.mes .ano{font-size:11px;color:var(--muted);line-height:1}
+.mes .conta{font-size:12px;font-weight:600;margin-top:4px}
+.mes.atual{box-shadow:inset 0 -3px 0 var(--lima)}
+.mes.sel{background:var(--verde);border-color:var(--verde);color:#fff}
+.mes.sel .nome{color:var(--lima)} .mes.sel .ano{color:#CFE6D6}
 
-/* cabeçalho de página / registro */
-.pagehead{background:var(--surface);border-bottom:1px solid var(--line);padding:14px 24px 0}
-.crumbs{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
-.crumbs a{text-decoration:none;font-weight:600}
-.titlerow{display:flex;align-items:flex-start;gap:16px;margin-top:6px;flex-wrap:wrap}
-.titlerow h1{font-family:var(--font-title);font-weight:600;font-size:20px;line-height:1.3}
-.titlerow .id{font-size:12px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.titlerow .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.keys{display:flex;flex-wrap:wrap;margin:12px 0 0;border-top:1px solid var(--line)}
-.keys div{padding:8px 20px 10px 0;margin-right:20px;min-width:100px}
-.keys dt{font-size:11px;color:var(--muted)}
-.keys dd{margin:2px 0 0;font-weight:600}
-.pad{padding:16px 24px 32px}
+.barra{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.barra h2{margin:0;font-size:20px}
+.barra .resumo{color:var(--muted);font-size:14px}
+.barra .dir{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:6px;border:1px solid transparent;cursor:pointer;font-weight:600;background:none}
+.btn-primario{background:var(--verde);color:#fff}
+.btn-primario:hover{background:var(--verde-2)}
+.btn-primario:disabled{background:#8FA99A;cursor:not-allowed}
+.btn-sec{background:#fff;color:var(--verde);border-color:var(--linha)}
+.btn-sec:hover{border-color:var(--verde)}
+.btn-link{color:var(--verde);padding:4px 6px;font-size:13px}
+.chk{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
 
-/* listagem */
-.filters{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;grid-template-columns:2fr repeat(4,minmax(120px,1fr)) auto;gap:10px 12px;align-items:end}
-.fl label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px}
-.fl select,.fl input,.field{height:30px;width:100%;border:1px solid var(--line-strong);border-radius:var(--r);background:var(--surface);padding:0 8px}
-.tablecard{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
-.toolbar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.toolbar .count{font-weight:600}
-.toolbar .sp{flex:1}
-.scroll{overflow-x:auto}
-table.grid{width:100%;border-collapse:collapse}
-table.grid th{background:var(--subtle);text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.grid td{padding:8px 10px;border-bottom:1px solid #E8ECEA;vertical-align:middle}
-table.grid.click tbody tr{cursor:pointer}
-table.grid.click tbody tr:hover td{background:#F5F8F6}
-table.grid .desc{max-width:340px}
-table.grid .desc b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-table.grid .desc span{color:var(--muted);font-size:12px}
-.mini{display:inline-flex;gap:2px;vertical-align:middle;margin-right:6px}
-.mini i{width:8px;height:4px;background:#DDE3E0;display:block}
-.mini i.f{background:var(--brand)}
-.empty{padding:28px;text-align:center;color:var(--muted)}
+.lista{display:flex;flex-direction:column;gap:10px}
+.oc{background:var(--papel);border:1px solid var(--linha);border-left:5px solid var(--ambar);border-radius:6px;padding:12px 16px}
+.oc.ok{border-left-color:var(--verde)} .oc.nok{border-left-color:var(--vermelho)} .oc.fora{border-left-color:#C9D3CC;opacity:.75}
+.oc .l1{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.oc h4{margin:0;font-size:15px}
+.oc .rel{font-size:13px;color:var(--muted);margin:4px 0 8px}
+.oc .l2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+.oc select{padding:4px 8px;border:1px solid var(--linha);border-radius:6px;font-size:13px;max-width:330px}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+.t-ok{background:var(--lima-suave);color:var(--verde)} .t-nok{background:var(--erro-bg);color:var(--erro)} .t-pend{background:var(--aviso-bg);color:var(--aviso)} .t-neutro{background:var(--cinza-bg);color:var(--muted)}
 
-/* área de trabalho */
-.workspace{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:calc(100vh - 48px)}
-.steps{background:var(--surface);border-right:1px solid var(--line);padding:16px 0}
-.steps h2{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;padding:0 16px}
-.prog{padding:8px 16px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
-.bar{height:4px;background:#E3E8E5;border-radius:2px;margin-top:6px;overflow:hidden}
-.bar span{display:block;height:100%;background:var(--brand)}
-.steps ol{list-style:none;margin:8px 0 0;padding:0}
-.steps li{position:relative}
-.steps li button{width:100%;display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;padding:9px 16px;text-align:left;background:none;border:0;border-left:3px solid transparent;cursor:pointer}
-.steps li button:hover{background:var(--subtle)}
-.steps li.on button{background:var(--brand-tint);border-left-color:var(--brand)}
-.steps li:not(:last-child)::after{content:"";position:absolute;left:30px;top:33px;bottom:-9px;width:1px;background:var(--line)}
-.dot{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line-strong);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);position:relative;z-index:1}
-.done .dot{background:var(--brand);border-color:var(--brand);color:#fff}
-.on .dot{border-color:var(--brand);color:var(--brand)}
-.done.on .dot{color:#fff}
-.steps .lbl{font-weight:600;line-height:1.25}
-.steps .sub{display:block;font-size:11px;font-weight:400;color:var(--muted);margin-top:1px}
-.steps .sub.w{color:var(--warn)}.steps .sub.e{color:var(--crit)}
-.steps .grp{margin-top:14px;padding:10px 16px 0;border-top:1px solid var(--line)}
-.steps .grp button{display:block;padding:5px 0;color:var(--brand);font-weight:600;font-size:12px;background:none;border:0;cursor:pointer}
-.steps .grp button.on{text-decoration:underline}
-.main{min-width:0;display:flex;flex-direction:column}
-.content{padding:16px 24px 24px;max-width:1240px;width:100%}
-.strip{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--warn-line);border-left-width:4px;background:var(--warn-bg);border-radius:var(--r);margin-bottom:14px}
-.strip b{color:var(--warn)}
-.strip.e{border-color:var(--crit-line);background:var(--crit-bg)}.strip.e b{color:var(--crit)}
-.strip.i{border-color:var(--brand-line);background:var(--brand-tint)}.strip.i b{color:var(--brand)}
-.strip.o{border-color:var(--ok-line);background:var(--ok-bg)}.strip.o b{color:var(--ok)}
-.strip ul{margin:4px 0 0;padding-left:18px}
-.strip .right{margin-left:auto;display:flex;gap:6px;align-items:center}
-.section{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px}
-.section > header{display:flex;align-items:baseline;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.section > header h3{font-size:14px;font-weight:700}
-.section > header .hint{font-size:12px;color:var(--muted)}
-.section > header .right{margin-left:auto;display:flex;gap:8px;align-items:center}
-.section .body{padding:14px 16px 16px}
-.section .body.flush{padding:0}
-.form{display:grid;grid-template-columns:repeat(12,1fr);gap:12px 16px}
-.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
-.f label.l,.lbl2{display:block;font-size:12px;font-weight:600;color:#3D4943;margin-bottom:4px}
-.req{color:var(--crit);margin-left:2px}
-.f input[type=text],.f input[type=date],.f input[type=time],.f input[type=number],.f input[type=url],.f select,.f textarea,.inp{width:100%;height:32px;border:1px solid var(--line-strong);border-radius:var(--r);padding:0 9px;background:var(--surface)}
-.f textarea,textarea.inp{height:auto;min-height:56px;padding:7px 9px;resize:vertical;line-height:1.45}
-.f input:focus,.f select:focus,.f textarea:focus,.inp:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 2px rgba(7,88,60,.15)}
-input:disabled,select:disabled,textarea:disabled{background:var(--subtle);color:var(--ink);opacity:1;cursor:default}
-.f .ro,.ro{min-height:32px;display:flex;align-items:center;padding:4px 9px;background:var(--subtle);border:1px solid var(--line);border-radius:var(--r);font-weight:600;gap:8px}
-.f .help{font-size:11px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;gap:8px}
-.w{font-size:11px;margin-top:4px;line-height:1.4}
-.w .a{color:var(--warn);display:block}
-.w .e{color:var(--crit);display:block}
-.radio{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden;height:32px}
-.radio button{display:flex;align-items:center;padding:0 14px;cursor:pointer;border:0;border-right:1px solid var(--line-strong);font-weight:600;background:var(--surface)}
-.radio button:last-child{border-right:0}
-.radio button.on{background:var(--brand-tint);box-shadow:inset 0 -2px 0 var(--brand);color:var(--brand)}
-.radio button:disabled{cursor:default}
-.checks{display:flex;gap:16px;min-height:32px;align-items:center;flex-wrap:wrap}
-.checks label{display:flex;gap:6px;align-items:center;cursor:pointer}
-input[type=checkbox]{accent-color:var(--brand);width:15px;height:15px}
-.kv{display:grid;grid-template-columns:170px 1fr;gap:6px 12px}
-.kv dt{color:var(--muted)}.kv dd{margin:0}
-.muted{color:var(--muted)}.small{font-size:12px}
+.tabela{overflow-x:auto;border:1px solid var(--linha);border-radius:6px;background:#fff}
+.tabela table{border-collapse:collapse;width:100%;font-size:13px}
+.tabela th,.tabela td{padding:7px 9px;border-bottom:1px solid var(--cinza-bg);text-align:center;white-space:nowrap}
+.tabela th:first-child,.tabela td:first-child{text-align:left;white-space:normal;min-width:240px}
+.tabela thead th{background:var(--lima-suave);color:var(--verde);font-weight:700}
+.tabela td .sub{display:block;font-size:11px;color:var(--muted)}
+.v-ok{color:var(--verde);font-weight:700} .v-nok{color:var(--erro);font-weight:700} .v-zero{color:#AEB9B2}
 
-/* tabelas de edição */
-table.edit{width:100%;border-collapse:collapse}
-table.edit th{background:var(--subtle);text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.edit td{padding:6px 8px;border-bottom:1px solid #E8ECEA;vertical-align:top}
-table.edit td.num{font-weight:700;color:var(--brand);width:46px;padding-top:12px}
-table.edit .inp{height:30px}
-.addrow{padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap}
+.vazio{background:var(--papel);border:1px dashed var(--linha);border-radius:6px;padding:28px;text-align:center;color:var(--muted)}
+.carregando{color:var(--muted);padding:18px 0}
+.aviso-box{background:var(--aviso-bg);border:1px solid var(--ambar);color:var(--aviso);border-radius:6px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.aviso-box ul{margin:4px 0 0;padding-left:18px}
+.legenda{font-size:13px;color:var(--muted);margin:0 0 12px;max-width:860px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--tinta);color:#fff;padding:10px 18px;border-radius:6px;z-index:80;font-size:14px}
+.toast.erro{background:var(--erro)}
 
-/* matriz */
-.mx-wrap{display:grid;grid-template-columns:auto minmax(260px,1fr);gap:20px;align-items:start}
-table.mx{border-collapse:separate;border-spacing:2px}
-table.mx th{font-size:11px;font-weight:600;color:var(--muted);background:var(--subtle);border:1px solid var(--line);padding:4px 8px;text-align:left;white-space:nowrap}
-table.mx th.col{text-align:center;width:70px}
-table.mx th.axis{background:none;border:0;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.3px;font-size:10px}
-table.mx td{width:70px;height:32px;text-align:center;font-weight:700;font-size:12px;cursor:pointer;border:1px solid transparent}
-table.mx td.b{background:var(--ok-bg);color:var(--ok);border-color:#D9EBC0}
-table.mx td.m{background:var(--warn-bg);color:var(--warn);border-color:#F6DDB0}
-table.mx td.a{background:var(--crit-bg);color:var(--crit);border-color:#F2C7C2}
-table.mx td:hover{border-color:var(--ink)}
-table.mx td.sel{outline:2px solid var(--ink);outline-offset:-1px}
-table.mx td.sel.b{background:var(--ok-line);color:#1E3F0F}
-table.mx td.sel.m{background:var(--warn-line);color:#3D2600}
-table.mx td.sel.a{background:var(--crit-line);color:#fff}
-.ro-mode table.mx td,.ro-mode table.ref td{cursor:default}
-.legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
-.legend span{display:inline-flex;align-items:center;gap:5px}
-.legend i{width:10px;height:10px;display:inline-block;border-radius:1px}
-.result{border:1px solid var(--line);border-radius:var(--r)}
-.result .hd{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--subtle)}
-.result .score{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
-.result dl{margin:0;padding:10px 12px;display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:12px}
-.result dt{color:var(--muted)}.result dd{margin:0}
-.result .acc{padding:0 12px 12px;font-size:12px;color:var(--muted)}
-details.crit{margin-top:12px;border:1px solid var(--line);border-radius:var(--r)}
-details.crit summary{padding:8px 12px;cursor:pointer;font-weight:600;color:var(--brand);list-style:none}
-details.crit summary::-webkit-details-marker{display:none}
-details.crit summary::before{content:"▸ ";color:var(--muted)}
-details.crit[open] summary::before{content:"▾ "}
-table.ref{width:100%;border-collapse:collapse;font-size:12px}
-table.ref th{background:var(--subtle);font-weight:700;color:var(--muted);text-align:left;padding:6px 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:11px}
-table.ref td{padding:6px 8px;border-bottom:1px solid #EBEFED;vertical-align:top;cursor:pointer}
-table.ref td:first-child{font-weight:600;color:var(--muted);cursor:default;white-space:nowrap}
-table.ref td.sel{background:var(--brand-tint);box-shadow:inset 3px 0 0 var(--brand);font-weight:600}
-
-/* casos semelhantes */
-.sim{border-top:1px solid #E8ECEA;padding:10px 16px;display:grid;grid-template-columns:120px 1fr;gap:4px 14px}
-.sim:first-child{border-top:0}
-.sim .meta{font-size:12px;color:var(--muted)}
-.sim .meta b{color:var(--ink);display:block}
-.sim .txt{font-size:12px}
-.sim .txt .ac{color:var(--muted);margin-top:3px}
-
-/* árvore */
-.tree-wrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}.tree-wrap>div{min-width:0}
-.canvas{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:auto;max-height:620px;min-height:340px}
-.canvas svg{display:block}
-.node{cursor:pointer}
-.panel{position:sticky;top:60px}
-
-/* ações */
-.acao{border-bottom:1px solid #E8ECEA;padding:12px 16px}
-.acao:last-child{border-bottom:0}
-.acao.pad{box-shadow:inset 3px 0 0 var(--ok-line)}
-.acao .top{display:grid;grid-template-columns:44px 1fr 28px;gap:8px;align-items:start}
-.acao .n{font-weight:700;color:var(--brand);padding-top:7px}
-.acao .grid4{display:grid;grid-template-columns:1.5fr 1.2fr .8fr 1fr;gap:10px;margin:8px 0 0 52px}
-.acao .causes{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0 52px;align-items:center}
-.acao .causes label{display:flex;gap:4px;align-items:center;border:1px solid var(--line);padding:2px 8px;border-radius:2px;cursor:pointer;font-size:12px}
-.acao .ef{margin:10px 0 0 52px;padding:10px 12px;border:1px solid var(--line);background:var(--subtle);border-radius:var(--r);display:grid;grid-template-columns:1fr 1fr 180px;gap:10px}
-
-/* rodapé de ações */
-.footbar{position:sticky;bottom:0;margin-top:auto;background:var(--surface);border-top:1px solid var(--line);padding:10px 24px;display:flex;align-items:center;gap:8px;z-index:5}
-.footbar .where{color:var(--muted);font-size:12px}
-.footbar .sp{flex:1}
-
-/* histórico */
-.timeline{list-style:none;margin:0;padding:0}
-.timeline li{display:grid;grid-template-columns:140px 1fr;gap:12px;padding:10px 16px;border-bottom:1px solid #E8ECEA}
-.timeline li:last-child{border-bottom:0}
-.timeline .when{color:var(--muted);font-size:12px}
-
-/* modal e toast */
-.modal{position:fixed;inset:0;background:rgba(20,30,25,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
-.modal .box.wide{max-width:980px}
-.mh{font:600 13px/1.3 'Open Sans',sans-serif;color:var(--brand);margin:0 0 4px}
-.modal .box{background:var(--surface);border-radius:4px;max-width:640px;width:100%;max-height:85vh;overflow:auto;border:1px solid var(--line)}
-.modal .box > header{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px}
-.modal .box > .body{padding:14px 16px}
-.modal .box > footer{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
-.toast{position:fixed;bottom:64px;right:20px;background:var(--ink);color:#fff;padding:10px 14px;border-radius:var(--r);z-index:70;max-width:380px;font-size:13px}
-.toast.err{background:var(--crit)}
-.ia .ob{border-left:3px solid var(--warn-line);padding:6px 10px;margin:8px 0;background:var(--subtle)}
-.ia .ob.alta{border-left-color:var(--crit-line)}.ia .ob.baixa{border-left-color:var(--ok-line)}
-body.noia .ia-only{display:none}
-.proto{font-size:10px;font-weight:700;letter-spacing:.4px;background:#B3DD64;color:var(--brand);padding:2px 6px;border-radius:2px}
-
-@media (max-width:1100px){.filters{grid-template-columns:1fr 1fr 1fr}.mx-wrap,.tree-wrap{grid-template-columns:1fr}.panel{position:static}.acao .grid4{grid-template-columns:1fr 1fr}.acao .ef{grid-template-columns:1fr}}
-@media (max-width:860px){.workspace{grid-template-columns:1fr}.steps{border-right:0;border-bottom:1px solid var(--line)}.steps li:not(:last-child)::after{display:none}.form > *{grid-column:span 12 !important}.appnav,.user .txt,.hsel label,.brand .sys,.brand .sep{display:none}.acao .grid4,.acao .causes,.acao .ef{margin-left:0}}
-@media (max-width:480px){.filters{grid-template-columns:1fr}.pagehead,.pad,.content{padding-left:16px;padding-right:16px}.kv{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.fundo-modal{position:fixed;inset:0;background:rgba(12,30,20,.55);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.modal{background:#fff;border-radius:10px;max-width:640px;width:100%;padding:22px 24px}
+.modal h3{margin:0 0 4px;color:var(--verde);font-size:19px}
+.modal .desc{margin:0 0 14px;color:var(--muted);font-size:14px}
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.campo label{font-size:13px;font-weight:600;color:var(--muted)}
+.campo input,.campo select,.campo textarea{padding:9px 11px;border:1px solid var(--linha);border-radius:6px;background:#fff;width:100%}
+.campo textarea{min-height:56px;resize:vertical}
+.campo .ajuda{font-size:12px;color:var(--muted)}
+.linha2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.linha2{grid-template-columns:1fr}}
+.badge-com{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--vermelho);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-left:4px}
+.badge-com:empty{display:none}
+.com-card{background:var(--papel);border:1px solid var(--linha);border-left:5px solid var(--ambar);border-radius:6px;padding:12px 16px;margin-bottom:10px}
+.com-card .l1{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.com-card h4{margin:0;font-size:15px}
+.com-card .meta{font-size:13px;color:var(--muted);margin:4px 0 6px}
+.colab{border:1px solid var(--linha);border-radius:8px;padding:10px 14px;margin-bottom:14px;background:#F7FAF4}
+.colab summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--verde)}
+.colab summary small{font-weight:400;color:var(--muted)}
+.colab[open] summary{margin-bottom:10px}
+.secao-inv{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--linha);font-size:13px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:.05em}
+.comite-campos{border:none;margin:0;padding:0;min-width:0}
+.comite-campos:disabled input,.comite-campos:disabled select,.comite-campos:disabled textarea{background:#F2F5F0;color:var(--muted);cursor:not-allowed}
+.regra{background:var(--fundo);border-radius:6px;padding:9px 12px;font-size:13px;margin-bottom:14px}
+.calc{border-radius:6px;padding:8px 12px;font-size:14px;margin:-4px 0 14px;background:var(--fundo)}
+.modal .rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-wrap:wrap}
+.erro-form{color:var(--erro);font-size:13px;margin:-4px 0 10px}
+.arq{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.arq label{font-weight:600;font-size:13px;min-width:180px}
 </style>
 </head>
-<body class="noia">
-<header class="appbar">
-  <div class="brand"><span class="org">Usina Santa Adélia</span><span class="sep"></span><span class="sys">SSMA · Investigação de Ocorrências</span></div>
-  <nav class="appnav" aria-label="Módulos">
-    <a href="#lista" id="nav-lista">Investigações</a>
-    <a href="#historico" id="nav-hist">Base histórica</a>
-    <a href="#config" id="nav-config">Configurações</a>
-  </nav>
-  <span class="sp"></span>
-  <div class="hsel"><label for="hUnidade">Unidade</label><select id="hUnidade"></select></div>
-  <div class="hsel" title="Somente no protótipo: troca o perfil para testar as permissões"><label for="hPerfil">Perfil <span class="proto">PROTÓTIPO</span></label><select id="hPerfil"></select></div>
-  <div class="user"><span class="avatar" id="uAv"></span><span class="txt"><span class="n" id="uNome"></span><br><span class="p" id="uPerfil"></span></span></div>
+<body>
+
+<header class="topo">
+  <div class="topo-inner">
+    <div>
+      <h1>Investigação de Acidentes</h1>
+      <div class="sub">Comitê de investigação e prazo conforme NP.AD.00.03.0002</div>
+    </div>
+    <div class="filtros">
+      <div><label for="f-safra">Safra</label><select id="f-safra"></select></div>
+      <div><label for="f-unid">Unidade</label><select id="f-unid"><option value="">Todas</option><option value="JB">JB</option><option value="PB">PB</option></select></div>
+      <div class="usuario-topo" id="usuario-topo" hidden></div>
+    </div>
+  </div>
 </header>
-<main id="app"></main>
-<div id="modal"></div>
-<script src="pptxgen.bundle.js"></script>
-<script src="app.js"></script>
+
+<main>
+  <div class="abas" role="tablist">
+    <button class="aba" data-aba="com" role="tab">Comunicados a classificar <span id="badge-com" class="badge-com"></span></button>
+    <button class="aba ativa" data-aba="oc" role="tab">Ocorrências</button>
+    <button class="aba" data-aba="safra" role="tab">Visão da safra</button>
+  </div>
+
+  <section id="aba-oc">
+    <div class="regua" id="regua"></div>
+    <div class="barra">
+      <h2 id="titulo-mes"></h2>
+      <span class="resumo" id="resumo-mes"></span>
+      <div class="dir">
+        <label class="chk"><input type="checkbox" id="f-todos"> mostrar também as sem deflator</label>
+        <button class="btn btn-primario" onclick="abrirOcorrencia()">＋ Nova ocorrência</button>
+        <button class="btn btn-link" onclick="abrirImportacao()" title="Importar a planilha antiga do SharePoint">importar planilha</button>
+      </div>
+    </div>
+    <div id="lista"><div class="carregando">Carregando...</div></div>
+  </section>
+
+  <section id="aba-com" class="hidden">
+    <p class="legenda">Comunicados de acidente e incidente enviados pelo formulário, a partir de outubro/2026, que ainda não foram classificados. Clique em <b>Classificar</b>: informe o colaborador, a classificação e se é deflator. Depois disso o comunicado vira uma ocorrência na aba <b>Ocorrências</b>.</p>
+    <label class="chk" style="margin:0 0 10px;display:inline-flex"><input type="checkbox" id="f-ver-desc" onchange="verDescartados=this.checked;renderComunicados()"> mostrar os descartados</label>
+    <div id="lista-com"><div class="carregando">Carregando os comunicados...</div></div>
+  </section>
+
+  <section id="aba-safra" class="hidden">
+    <p class="legenda">É assim que o Hub grava no IP, só com as ocorrências com <b>DEFLATOR = SIM</b> a partir de <b>outubro/2026</b>, no mês da ocorrência. Em cada célula: <b>Comitê</b> = comitê conforme a classificação; <b>Prazo</b> = investigação concluída no prazo. "—" = sem ocorrência no mês (0 de 0).</p>
+    <div class="tabela" id="tabela-safra"></div>
+  </section>
+</main>
+
+<div id="modal-raiz"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Conexão (mesmo projeto e sessão do portal)
+// ─────────────────────────────────────────────────────────────
+const SB_URL = 'https://umpctnchhmyvpjwxllaj.supabase.co';
+const SB_KEY = 'sb_publishable_lxiF04jATB1HMLINX-FvOg_3JOjXxrQ';
+const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageKey: 'sistema-ip-auth' } });
+const PORTAL_URL = 'https://tkichelewski-web.github.io/portal-ip/';
+
+// Apelidos de gerência do ATIVOS → cadastro do IP (os mesmos do Hub)
+const ALIASES_GERENCIA = {
+  'DIRETORIA DE PESSOAS': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERINTENDENCIA': 'Supervisão Excelência e Projetos',
+  'SUPERVISAO FACILITIES': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'GERENCIA RH': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERVISAO RH': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'GERENCIA JURIDICO': 'RH/Jurídico/Restaurante/Saúde/Facilities',
+  'SUPERVISAO JURIDICO': 'RH/Jurídico/Restaurante/Saúde/Facilities'
+};
+// O controle começou em outubro/2026: ocorrências anteriores ficam na tela, mas não contam no IP
+const INICIO_CONTROLE = '2026-10-01';
+const contaNoIP = a => a.deflator && a.data >= INICIO_CONTROLE;
+// Comunicados de ocorrência (Google Planilhas / Apps Script do formulário de comunicado)
+const COMUNICADOS_URL = 'https://script.google.com/macros/s/AKfycbxoBjqY-IXjUx04kD9BUSOUgBLpShui5_y3tvM_dpnzGKmQcr1KhDR4_rhKn3kWq-bzkQ/exec';  // App da Web do formulário de comunicado
+const COMUNICADOS_CHAVE = 'SSMAD3C85069E026';  // igual à CHAVE_LEITURA_IP do Código.gs
+let comunicados = [], comunicadosErro = '', descartados = new Map(), verDescartados = false;
+const NIVEIS = ['Supervisor', 'Coordenador', 'Gerente', 'Diretor', 'Outro'];
+const MESES_SAFRA = [['04','Abr'],['05','Mai'],['06','Jun'],['07','Jul'],['08','Ago'],['09','Set'],['10','Out'],['11','Nov'],['12','Dez'],['01','Jan'],['02','Fev'],['03','Mar']];
+const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+let safras = [], gerencias = [], acidentes = [], usuarioAtual = null, mesSel = null;
+
+const $ = id => document.getElementById(id);
+const semTags = t => String(t ?? '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const hojeMes = () => hojeISO().slice(0, 7);
+const fmtData = d => d ? d.slice(0, 10).split('-').reverse().join('/') : '';
+const nomeMesLongo = ym => NOMES_MES[Number(ym.slice(5, 7)) - 1] + ' de ' + ym.slice(0, 4);
+const safraAtual = () => safras.find(s => s.id === Number($('f-safra').value));
+const quem = () => ({ nome: usuarioAtual?.nome || null, email: usuarioAtual?.email || null });
+const agoraISO = () => new Date().toISOString();
+const gerPorId = id => gerencias.find(g => g.id === id);
+const nomeGer = g => g ? g.nome + (g.unidades?.nome && !norm(g.nome).endsWith(norm(g.unidades.nome)) ? ' — ' + g.unidades.nome : '') : '';
+const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+function mesesDaSafra(s) {
+  if (!s) return [];
+  return MESES_SAFRA.map(([n, abr]) => ({ ym: (Number(n) >= 4 ? s.ano_ini : s.ano_fim) + '-' + n, abr, ano: Number(n) >= 4 ? s.ano_ini : s.ano_fim }));
+}
+function toast(msg, erro) {
+  const t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), erro ? 6000 : 2600);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Regras do procedimento (iguais às da visão acidentes_ip no banco)
+// ─────────────────────────────────────────────────────────────
+function regra(a) {
+  const c = norm(a.classificacao);
+  const grave = c.includes('FATAL') || c.includes('GRANDE PROPOR');
+  return { prazo: grave ? 15 : 7, nivel: grave ? 'GERENTE' : 'SUPERVISOR', rotuloNivel: grave ? 'Gerente de área' : 'Supervisor de área' };
+}
+function comiteOk(a) {
+  // Resposta direta da baixa ("comitê conforme o procedimento?"); sem ela, regra antiga pelos campos do comitê
+  if (a.inv_comite_conforme === true || a.inv_comite_conforme === false) return a.inv_comite_conforme;
+  const r = regra(a), n = norm(a.inv_responsavel_nivel);
+  const nivelOk = ['GERENTE', 'DIRETOR'].includes(n) || (r.nivel === 'SUPERVISOR' && ['SUPERVISOR', 'COORDENADOR'].includes(n));
+  return !!(a.inv_responsavel && a.inv_cipa && nivelOk);
+}
+function prazoInfo(a) {
+  const r = regra(a), limite = somaDias(a.data, r.prazo);
+  if (a.inv_data_conclusao) return a.inv_data_conclusao <= limite
+    ? { ok: true, cls: 't-ok', txt: `Concluída no prazo (${fmtData(a.inv_data_conclusao)})` }
+    : { ok: false, cls: 't-nok', txt: `Concluída fora do prazo (${fmtData(a.inv_data_conclusao)}, limite ${fmtData(limite)})` };
+  if (hojeISO() > limite) return { ok: false, cls: 't-nok', txt: `Prazo vencido em ${fmtData(limite)}` };
+  const dias = Math.round((new Date(limite + 'T12:00:00') - new Date(hojeISO() + 'T12:00:00')) / 86400000);
+  return { ok: false, cls: 't-pend', txt: `Vence em ${fmtData(limite)} (${dias} dia${dias === 1 ? '' : 's'})` };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Login (pelo portal)
+// ─────────────────────────────────────────────────────────────
+async function exigirLogin() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.replace(PORTAL_URL + '?voltar=' + encodeURIComponent(location.href.split('#')[0])); return false; }
+  const u = session.user;
+  const { data } = await sb.from('usuarios').select('nome').eq('auth_id', u.id).maybeSingle();
+  usuarioAtual = { nome: (data && data.nome) || u.email, email: (u.email || '').toLowerCase() };
+  const box = $('usuario-topo');
+  box.innerHTML = 'Conectado como <b></b><button type="button">Sair</button>';
+  box.querySelector('b').textContent = usuarioAtual.nome;
+  box.querySelector('button').onclick = async () => { await sb.auth.signOut(); location.href = PORTAL_URL; };
+  box.hidden = false;
+  return true;
+}
+
+async function init() {
+  if (!(await exigirLogin())) return;
+  const [rs, rg] = await Promise.all([
+    sb.from('safras').select('id,nome,ano_ini,ano_fim').eq('ativa', true).order('ano_ini', { ascending: false }),
+    sb.from('gerencias').select('id,nome,unidade_id,unidades(nome)').eq('ativo', true).order('nome')
+  ]);
+  if (rs.error || rg.error) { $('lista').innerHTML = `<div class="vazio">Não consegui ler o Supabase: ${esc((rs.error || rg.error).message)}</div>`; return; }
+  safras = rs.data || []; gerencias = rg.data || [];
+  $('f-safra').innerHTML = safras.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('');
+  $('f-safra').onchange = () => { mesSel = null; render(); };
+  $('f-unid').onchange = render;
+  $('f-todos').onchange = render;
+  document.querySelectorAll('.aba').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.aba').forEach(x => x.classList.toggle('ativa', x === b));
+    $('aba-oc').classList.toggle('hidden', b.dataset.aba !== 'oc');
+    $('aba-safra').classList.toggle('hidden', b.dataset.aba !== 'safra');
+    $('aba-com').classList.toggle('hidden', b.dataset.aba !== 'com');
+    if (b.dataset.aba === 'com') renderComunicados(); else render();
+  });
+  carregar();
+}
+
+async function carregar() {
+  const { data, error } = await sb.from('acidentes').select('*').order('data');
+  if (error) { $('lista').innerHTML = `<div class="vazio">Erro: ${esc(error.message)}${String(error.message).includes('acidentes') ? '<br>Rode antes o SQL de criação da tabela.' : ''}</div>`; return; }
+  acidentes = data || [];
+  render();
+  carregarComunicados();
+}
+
+function visiveis() {
+  const s = safraAtual(); if (!s) return [];
+  const ini = s.ano_ini + '-04-01', fim = s.ano_fim + '-03-31', u = $('f-unid').value;
+  return acidentes.filter(a => a.data >= ini && a.data <= fim && (!u || norm(a.unidade) === u));
+}
+function render() {
+  const s = safraAtual(); if (!s) return;
+  if (!mesSel) { const ms = mesesDaSafra(s).map(m => m.ym); mesSel = ms.includes(hojeMes()) ? hojeMes() : ms[ms.length - 1]; }
+  if (!$('aba-oc').classList.contains('hidden')) { renderRegua(); renderLista(); }
+  else renderSafra();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Aba: ocorrências
+// ─────────────────────────────────────────────────────────────
+function renderRegua() {
+  const vis = visiveis().filter(contaNoIP);
+  $('regua').innerHTML = mesesDaSafra(safraAtual()).map(m => {
+    const doMes = vis.filter(a => a.data.slice(0, 7) === m.ym);
+    const ok = doMes.filter(a => comiteOk(a) && prazoInfo(a).ok).length;
+    const txt = doMes.length ? `${ok}/${doMes.length}` : '—';
+    return `<div class="mes ${m.ym === mesSel ? 'sel' : ''} ${m.ym === hojeMes() ? 'atual' : ''}" tabindex="0" role="button" onclick="selMes('${m.ym}')" onkeydown="if(event.key==='Enter')selMes('${m.ym}')" aria-label="${nomeMesLongo(m.ym)}: ${txt}">
+      <div class="nome">${m.abr}</div><div class="ano">${m.ano}</div><div class="conta">${txt}</div></div>`;
+  }).join('');
+}
+function selMes(ym) { mesSel = ym; renderRegua(); renderLista(); }
+
+function renderLista() {
+  $('titulo-mes').textContent = nomeMesLongo(mesSel);
+  if (!acidentes.length) { $('resumo-mes').textContent = ''; $('lista').innerHTML = '<div class="vazio">Nenhuma ocorrência ainda. Clique em <b>＋ Nova ocorrência</b>.</div>'; return; }
+  const doMes = visiveis().filter(a => a.data.slice(0, 7) === mesSel);
+  const defl = doMes.filter(contaNoIP);
+  const antes = mesSel < INICIO_CONTROLE.slice(0, 7);
+  const mostrar = $('f-todos').checked || antes ? doMes : defl;
+  $('resumo-mes').textContent = antes
+    ? `${doMes.length} ocorrência(s) — antes do início do controle (outubro/2026), não contam no IP`
+    : `${defl.length} com deflator · comitê conforme ${defl.filter(comiteOk).length} · no prazo ${defl.filter(a => prazoInfo(a).ok).length}` + (doMes.length > defl.length ? ` · ${doMes.length - defl.length} sem deflator` : '');
+  if (!mostrar.length) { $('lista').innerHTML = `<div class="vazio">Nenhuma ocorrência com deflator em ${nomeMesLongo(mesSel).toLowerCase()}.</div>`; return; }
+  const opcoesGer = sel => '<option value="">— escolha a gerência —</option>' + gerencias.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(nomeGer(g))}</option>`).join('');
+  $('lista').innerHTML = '<div class="lista">' + mostrar.sort((a, b) => a.data.localeCompare(b.data)).map(a => {
+    const p = prazoInfo(a), c = comiteOk(a);
+    const cls = !contaNoIP(a) || naoInvestiga(a.classificacao) ? 'fora' : (c && p.ok ? 'ok' : (p.cls === 't-nok' || (a.inv_responsavel && !c) ? 'nok' : ''));
+    const semInv = naoInvestiga(a.classificacao);
+    const comiteInformado = a.inv_comite_conforme === true || a.inv_comite_conforme === false || !!a.inv_responsavel;
+    const tagCom = comiteInformado ? (c ? '<span class="tag t-ok">Comitê conforme</span>' : '<span class="tag t-nok">Comitê fora da regra</span>') : '<span class="tag t-pend">Comitê não informado</span>';
+    return `<article class="oc ${cls}">
+      <div class="l1"><h4>${fmtData(a.data)} · ${esc(semTags(a.nome) || '(sem nome)')}</h4>
+        <span class="tag t-neutro">${esc(a.classificacao || 'Sem classificação')}</span>
+        ${a.data < INICIO_CONTROLE ? '<span class="tag t-neutro">Antes de out/2026 — fora do IP</span>' : a.deflator ? '<span class="tag t-nok">Deflator</span>' : '<span class="tag t-neutro">Sem deflator — fora do IP</span>'}
+        <span style="font-size:13px;color:var(--muted)">${esc([a.unidade, a.area, a.setor].filter(Boolean).join(' · '))}</span></div>
+      <div class="rel">${esc(semTags(a.relato))}</div>
+      <div class="l2">
+        <label style="color:var(--muted)">Gerência:</label>
+        <select onchange="trocarGerencia(${a.id}, this.value)" aria-label="Gerência da ocorrência">${opcoesGer(a.gerencia_id)}</select>
+        ${a.gerencia_origem === 'manual' ? '<span class="tag t-neutro">escolhida à mão</span>' : a.gerencia_ativos ? `<span class="tag t-neutro" title="Texto no ATIVOS">ATIVOS: ${esc(a.gerencia_ativos)}</span>` : ''}
+      </div>
+      <div class="l2" style="margin-top:8px">
+        ${semInv ? '<span class="tag t-neutro">Não exige investigação</span>' : `${tagCom}<span class="tag ${p.cls}">${esc(p.txt)}</span>`}
+        ${a.inv_relatorio_url ? `<a class="btn-link" href="${esc(a.inv_relatorio_url)}" target="_blank" rel="noopener">Relatório</a>` : ''}
+        <button class="btn btn-link" style="margin-left:auto" onclick="abrirOcorrencia(${a.id})">Editar ocorrência</button>
+        ${semInv ? '' : `<button class="btn btn-sec" onclick="abrirInvestigacao(${a.id})">${a.inv_responsavel || a.inv_data_conclusao || a.inv_comite_conforme != null ? 'Ver / editar investigação' : 'Registrar investigação'}</button>`}
+      </div></article>`;
+  }).join('') + '</div>';
+}
+
+async function trocarGerencia(id, valor) {
+  const a = acidentes.find(x => x.id === id); if (!a) return;
+  const dados = { gerencia_id: valor ? Number(valor) : null, gerencia_origem: valor ? 'manual' : null, atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO() };
+  const { error } = await sb.from('acidentes').update(dados).eq('id', id);
+  if (error) { toast('Não salvou: ' + error.message, true); return; }
+  Object.assign(a, dados); toast('Gerência atualizada'); render();
+}
+
+function abrirInvestigacao(id) {
+  const a = acidentes.find(x => x.id === id); if (!a) return;
+  // Comitê: só a confirmação (os nomes já estão na apresentação da investigação)
+  const comitePre = (a.inv_comite_conforme === true || a.inv_comite_conforme === false) ? a.inv_comite_conforme : (a.inv_responsavel ? comiteOk(a) : null);
+  const r = regra(a), limite = somaDias(a.data, r.prazo);
+  abrirModal(`
+    <h3>Investigação da ocorrência</h3>
+    <p class="desc">${fmtData(a.data)} · ${esc(a.nome || '')} · ${esc(a.classificacao || 'Sem classificação')}</p>
+    <div class="regra">Pelo procedimento: responsável <b>${r.rotuloNivel}</b>, ao menos <b>1 membro da CIPA/CIPATR</b> no comitê, e análise concluída em até <b>${r.prazo} dias</b> (até ${fmtData(limite)}).${a.status_planilha ? `<br>Status na planilha: ${esc(a.status_planilha)}` : ''}</div>
+    <div class="campo"><label for="i-comite-ok">Comitê formado conforme o procedimento?</label>
+      <select id="i-comite-ok"><option value="">—</option><option value="1" ${comitePre === true ? 'selected' : ''}>Sim</option><option value="0" ${comitePre === false ? 'selected' : ''}>Não</option></select>
+      <span class="ajuda">Confira na apresentação da investigação: responsável ${r.rotuloNivel.toLowerCase()} e ao menos 1 membro da CIPA/CIPATR.</span></div>
+    <div class="linha2">
+      <div class="campo"><label for="i-data">Data de conclusão da análise</label><input type="date" id="i-data" min="${a.data}" max="${hojeISO()}" value="${a.inv_data_conclusao || ''}">
+        <span class="ajuda">Deixe em branco enquanto a análise não terminar.</span></div>
+      <div class="campo"><label for="i-rel">Link do relatório no SharePoint</label><input type="url" id="i-rel" value="${esc(a.inv_relatorio_url || '')}" placeholder="https://..."></div>
+    </div>
+    <div class="campo"><label for="i-obs">Observações</label><textarea id="i-obs">${esc(a.inv_observacoes || '')}</textarea></div>
+    <div class="calc" id="i-calc"></div>
+    ${a.inv_registrado_por ? `<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px">Registrado por ${esc(a.inv_registrado_por)} em ${fmtData(a.inv_registrado_em)}${a.atualizado_por && a.atualizado_por !== a.inv_registrado_por ? ' · alterado por ' + esc(a.atualizado_por) : ''}</p>` : ''}
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="i-salvar">Salvar</button></div>`);
+  const leitura = () => ({ ...a, inv_comite_conforme: $('i-comite-ok').value === '' ? null : $('i-comite-ok').value === '1', inv_data_conclusao: $('i-data').value || null });
+  const calc = () => {
+    const x = leitura(), p = prazoInfo(x), c = comiteOk(x);
+    $('i-calc').innerHTML = `Comitê: <b style="color:${c ? 'var(--verde)' : 'var(--erro)'}">${c ? 'conforme' : 'fora da regra'}</b> · Prazo: <b>${esc(p.txt)}</b>`;
+  };
+  ['i-comite-ok', 'i-data'].forEach(k => { $(k).oninput = calc; $(k).onchange = calc; }); calc();
+  $('i-salvar').onclick = async () => {
+    const x = leitura(), erro = t => { $('m-erro').textContent = t; };
+    if (x.inv_data_conclusao && x.inv_data_conclusao < a.data) return erro('A conclusão não pode ser antes da ocorrência.');
+    if (x.inv_data_conclusao && !$('i-rel').value.trim()) return erro('Com a análise concluída, informe o link do relatório.');
+    const dados = { inv_comite_conforme: x.inv_comite_conforme,
+      inv_data_conclusao: x.inv_data_conclusao, inv_relatorio_url: $('i-rel').value.trim() || null, inv_observacoes: $('i-obs').value.trim() || null,
+      atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO(),
+      ...(a.inv_registrado_por ? {} : { inv_registrado_por: quem().nome, inv_registrado_em: agoraISO() }) };
+    const btn = $('i-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
+    const { error } = await sb.from('acidentes').update(dados).eq('id', a.id);
+    if (error) { btn.disabled = false; btn.textContent = 'Tentar de novo'; return erro('Não salvou: ' + error.message); }
+    Object.assign(a, dados); fecharModal(); toast('Investigação salva'); render();
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Cadastro da ocorrência direto na tela (o colaborador vem do ATIVOS do Supabase)
+// ─────────────────────────────────────────────────────────────
+const CLASSIFICACOES = ['ASA (PRIMEIROS SOCORROS)', 'ASA (TRATAMENTO MÉDICO)', 'ASA (TRABALHO RESTRITO)', 'ACA (AFASTAMENTO)', 'FATALIDADE',
+  'INCIDENTE DE ALTO POTENCIAL', 'INCIDENTE DE MÉDIO POTENCIAL', 'INCIDENTE DE BAIXO POTENCIAL', 'NÃO INVESTIGÁVEL', 'ACIDENTE AMBIENTAL DE BAIXA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE MÉDIA PROPORÇÃO', 'ACIDENTE AMBIENTAL DE GRANDE PROPORÇÃO', 'TRAJETO'];
+// Pelo procedimento (nota 5 e item 4.3), só o incidente de ALTO potencial precisa ser investigado
+const naoInvestiga = c => /MEDIO POTENCIAL|BAIXO POTENCIAL|NAO INVESTIGAVEL/.test(norm(c));
+const unidadeSigla = u => { const n = norm(u); return n.includes('JABOTICABAL') || n === 'JB' ? 'JB' : n.includes('PEREIRA') || n === 'PB' ? 'PB' : (u || ''); };
+async function buscarNoAtivos(mat) {
+  const m = String(mat || '').replace(/\D/g, ''); if (!m) return null;
+  const { data } = await sb.from('ativos').select('matricula,nome,unidade,diretoria,gerencia,supervisao,cargo').eq('matricula', m).maybeSingle();
+  return data || null;
+}
+function abrirOcorrencia(id, com) {
+  let a = id ? acidentes.find(x => x.id === id) : null;
+  // Vindo de um comunicado: já traz data, unidade, local, tipo e relato
+  if (!a && com) {
+    const un = unidadeSigla(cc(com, ['Unidade']));
+    const gc = acharGerencia(cc(com, ['Gerência', 'Gerencia']), un);
+    const detalhes = [cc(com, ['Parte do corpo', 'Parte do Corpo']) && 'Parte do corpo: ' + cc(com, ['Parte do corpo', 'Parte do Corpo']), cc(com, ['Lado']) && 'Lado: ' + cc(com, ['Lado']), cc(com, ['Status do atendimento', 'Tratamento', 'Atendimento']) && 'Tratamento: ' + cc(com, ['Status do atendimento', 'Tratamento', 'Atendimento'])].filter(Boolean).join(' · ');
+    a = { _novo: true, comunicado_codigo: String(cc(com, ['Código'])), data: String(cc(com, ['Data'])).slice(0, 10), unidade: un,
+      area: [cc(com, ['Item', 'Local / Frente', 'Local']), cc(com, ['Complemento do local'])].filter(Boolean).join(' — '), setor: cc(com, ['Setor', 'Supervisão']) || '',
+      tipo_ocorrencia: norm(cc(com, ['Tipo'])) === 'INCIDENTE' ? 'Incidente' : 'Acidente', classificacao: '', deflator: norm(cc(com, ['Tipo'])) !== 'INCIDENTE',
+      relato: [semTags(cc(com, ['Descrição', 'Descricao'])), detalhes].filter(Boolean).join(' — '),
+      gerencia_id: gc ? gc.id : null, gerencia_origem: gc ? 'comunicado' : null };
+  }
+  const editando = a && !a._novo;
+  const opcoesGer = sel => '<option value="">— escolha —</option>' + gerencias.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(nomeGer(g))}</option>`).join('');
+  const classAtual = a?.classificacao || '';
+  abrirModal(`
+    <h3>${editando ? 'Editar ocorrência' : a?._novo ? 'Classificar comunicado ' + esc(a.comunicado_codigo) : 'Nova ocorrência'}</h3>
+    <p class="desc">Para o IP bastam a data, a gerência, a classificação e o deflator. Os dados do colaborador são opcionais.</p>
+    <div class="linha2">
+      <div class="campo"><label for="o-data">Data da ocorrência</label><input type="date" id="o-data" max="${hojeISO()}" value="${a?.data || ''}"></div>
+      <div class="campo"><label for="o-un">Unidade</label><select id="o-un"><option value="">—</option><option ${unidadeSigla(a?.unidade) === 'JB' ? 'selected' : ''}>JB</option><option ${unidadeSigla(a?.unidade) === 'PB' ? 'selected' : ''}>PB</option></select></div>
+    </div>
+    <details class="colab" ${a?.matricula || a?.nome ? 'open' : ''}>
+      <summary>Dados do colaborador <small>(opcional)</small></summary>
+      <div class="linha2">
+        <div class="campo"><label for="o-mat">Matrícula</label><input id="o-mat" inputmode="numeric" value="${esc(a?.matricula || '')}" placeholder="Ex.: 20021665">
+        <span class="ajuda" id="o-ativos-info"></span></div>
+        <div class="campo"><label for="o-nome">Nome do colaborador</label><input id="o-nome" value="${esc(semTags(a?.nome))}"></div>
+      </div>
+      <div class="linha2">
+        <div class="campo"><label for="o-cargo">Cargo</label><input id="o-cargo" value="${esc(a?.cargo || '')}"></div>
+        <div class="campo"><label for="o-tipocol">Colaborador</label>
+        <select id="o-tipocol"><option ${!a || norm(a.tipo_colaborador) !== 'TERCEIRO' ? 'selected' : ''}>Próprio</option><option ${norm(a?.tipo_colaborador) === 'TERCEIRO' ? 'selected' : ''}>Terceiro</option></select></div>
+      </div>
+    </details>
+    <div class="campo"><label for="o-ger">Gerência (onde conta no IP)</label><select id="o-ger">${opcoesGer(a?.gerencia_id)}</select>
+      <span class="ajuda">Vem do local do comunicado (ou do ATIVOS, se informar a matrícula). Troque se a ocorrência deve contar em outra gerência.</span></div>
+    <div class="linha2">
+      <div class="campo"><label for="o-area">Área / local</label><input id="o-area" value="${esc(a?.area || '')}"></div>
+      <div class="campo"><label for="o-setor">Setor</label><input id="o-setor" value="${esc(a?.setor || '')}"></div>
+    </div>
+    <div class="linha2">
+      <div class="campo"><label for="o-tipo">Tipo de ocorrência</label>
+        <select id="o-tipo">${['Acidente', 'Incidente', 'Ambiental'].map(t => `<option ${norm(a?.tipo_ocorrencia) === norm(t) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="campo"><label for="o-class">Classificação</label>
+        <select id="o-class"><option value="">— escolha —</option>${CLASSIFICACOES.map(c => `<option ${norm(classAtual) === norm(c) ? 'selected' : ''}>${c}</option>`).join('')}${classAtual && !CLASSIFICACOES.some(c => norm(c) === norm(classAtual)) ? `<option selected>${esc(classAtual)}</option>` : ''}</select></div>
+    </div>
+    <div class="campo"><label for="o-defl">Conta como deflator?</label>
+      <select id="o-defl"><option value="1" ${!a || a.deflator ? 'selected' : ''}>Sim</option><option value="0" ${a && !a.deflator ? 'selected' : ''}>Não</option></select>
+      <span class="ajuda" id="o-defl-nota">Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.</span></div>
+    <div class="campo"><label for="o-relato">Breve relato</label><textarea id="o-relato" rows="3">${esc(semTags(a?.relato))}</textarea></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape">
+      ${editando ? '<button class="btn btn-link" id="o-excluir" style="margin-right:auto;color:var(--erro)">Excluir ocorrência</button>' : ''}
+      <button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="o-salvar">${editando ? 'Salvar' : 'Salvar ocorrência'}</button></div>`);
+  let gerAtivos = a?.gerencia_ativos || null, origem = a?.gerencia_origem || null;
+  const syncDefl = () => {
+    const c = norm($('o-class').value), sem = naoInvestiga(c);
+    if (c.includes('TRAJETO') || sem) $('o-defl').value = '0';
+    $('o-defl').disabled = sem;
+    $('o-defl-nota').textContent = sem ? 'Incidente de médio/baixo potencial ou não investigável: não exige investigação e não entra no IP.' : 'Pelo procedimento, trajeto e animal peçonhento não contam nos indicadores de acidente.';
+  };
+  $('o-class').onchange = syncDefl; syncDefl();
+  $('o-ger').onchange = () => { origem = 'manual'; };
+  $('o-mat').onchange = async () => {
+    const info = $('o-ativos-info'); info.textContent = 'Procurando no ATIVOS...';
+    const r = await buscarNoAtivos($('o-mat').value);
+    if (!r) { info.textContent = 'Matrícula não encontrada no ATIVOS: preencha os dados à mão.'; return; }
+    $('o-nome').value = r.nome || ''; $('o-cargo').value = r.cargo || '';
+    const un = unidadeSigla(r.unidade); if (un) $('o-un').value = un;
+    $('o-area').value = $('o-area').value || r.gerencia || ''; $('o-setor').value = $('o-setor').value || r.supervisao || '';
+    gerAtivos = r.gerencia || null;
+    const g = acharGerencia(r.gerencia, un);
+    if (g) { $('o-ger').value = g.id; origem = 'ativos'; }
+    info.textContent = '✓ ' + [r.cargo, r.gerencia, r.supervisao].filter(Boolean).join(' · ') + (g ? '' : ' (gerência não reconhecida: escolha à mão)');
+  };
+  $('o-salvar').onclick = async () => {
+    const erro = t => { $('m-erro').textContent = t; };
+    const data = $('o-data').value, mat = $('o-mat').value.replace(/\D/g, ''), nome = $('o-nome').value.trim();
+    if (!data) return erro('Informe a data da ocorrência.');
+    if (!$('o-class').value) return erro('Escolha a classificação.');
+    if (!$('o-ger').value) return erro('Escolha a gerência.');
+    if (!$('o-un').value) return erro('Escolha a unidade.');
+    const dados = {
+      data, matricula: mat || null, nome: nome || null, cargo: $('o-cargo').value.trim() || null, unidade: $('o-un').value,
+      tipo_colaborador: $('o-tipocol').value, area: $('o-area').value.trim() || null, setor: $('o-setor').value.trim() || null,
+      tipo_ocorrencia: $('o-tipo').value, classificacao: $('o-class').value, deflator: !naoInvestiga($('o-class').value) && $('o-defl').value === '1',
+      relato: $('o-relato').value.trim() || null, gerencia_id: Number($('o-ger').value), gerencia_origem: origem || 'manual', gerencia_ativos: gerAtivos,
+      atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO()
+    };
+    const btn = $('o-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
+    let error;
+    if (editando) ({ error } = await sb.from('acidentes').update(dados).eq('id', a.id));
+    else {
+      if (a?.comunicado_codigo) dados.comunicado_codigo = a.comunicado_codigo;
+      dados.chave = a?.comunicado_codigo ? 'COM|' + a.comunicado_codigo : data + '|' + (mat || norm(nome)) + '|' + Date.now().toString(36);
+      ({ error } = await sb.from('acidentes').insert(dados));
+    }
+    if (error) { btn.disabled = false; btn.textContent = 'Tentar de novo'; return erro('Não salvou: ' + error.message); }
+    fecharModal(); toast(editando ? 'Ocorrência atualizada' : a?._novo ? 'Comunicado classificado' : 'Ocorrência cadastrada'); mesSel = data.slice(0, 7); carregar();
+  };
+  if ($('o-excluir')) $('o-excluir').onclick = async () => {
+    if (!confirm('Excluir esta ocorrência? A investigação registrada nela também será apagada.')) return;
+    const { error } = await sb.from('acidentes').delete().eq('id', a.id);
+    if (error) { $('m-erro').textContent = 'Não excluiu: ' + error.message; return; }
+    fecharModal(); toast('Ocorrência excluída'); carregar();
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Comunicados a classificar
+// ─────────────────────────────────────────────────────────────
+const cc = (o, nomes) => { for (const n of nomes) { const k = Object.keys(o).find(x => norm(x) === norm(n)); if (k && o[k] !== '' && o[k] != null) return o[k]; } return ''; };
+async function carregarComunicados() {
+  if (!COMUNICADOS_URL || !COMUNICADOS_CHAVE) { comunicadosErro = 'config'; atualizarBadge(); return; }
+  try {
+    const url = COMUNICADOS_URL + '?acao=comunicados&chave=' + encodeURIComponent(COMUNICADOS_CHAVE) + '&desde=' + INICIO_CONTROLE;
+    const r = await fetch(url); const j = await r.json();
+    if (j.erro) throw new Error(j.erro);
+    comunicados = j.comunicados || []; comunicadosErro = '';
+    const rd = await sb.from('comunicados_descartados').select('*');
+    descartados = new Map((rd.data || []).map(d => [d.codigo, d]));
+  } catch (e) { comunicadosErro = e.message || String(e); comunicados = []; }
+  atualizarBadge();
+  if (!$('aba-com').classList.contains('hidden')) renderComunicados();
+}
+function comunicadosPendentes() {
+  const feitos = new Set(acidentes.map(a => a.comunicado_codigo).filter(Boolean));
+  return comunicados.filter(c => !feitos.has(String(cc(c, ['Código']))) && !descartados.has(String(cc(c, ['Código']))))
+    .sort((a, b) => String(cc(a, ['Data'])).localeCompare(String(cc(b, ['Data']))));
+}
+function atualizarBadge() { const n = comunicadosPendentes().length; $('badge-com').textContent = n ? n : ''; }
+function renderComunicados() {
+  const el = $('lista-com');
+  if (comunicadosErro === 'config') { el.innerHTML = '<div class="vazio">Falta ligar a planilha dos comunicados: preencha COMUNICADOS_URL e COMUNICADOS_CHAVE no início do código desta tela.</div>'; return; }
+  if (comunicadosErro) { el.innerHTML = `<div class="vazio">Não consegui ler os comunicados: ${esc(comunicadosErro)}</div>`; return; }
+  const u = $('f-unid').value;
+  const feitos = new Set(acidentes.map(a => a.comunicado_codigo).filter(Boolean));
+  const base = verDescartados ? comunicados.filter(c => !feitos.has(String(cc(c, ['Código'])))) : comunicadosPendentes();
+  const lista = base.filter(c => !u || unidadeSigla(cc(c, ['Unidade'])) === u);
+  if (!lista.length) { el.innerHTML = '<div class="vazio">Nenhum comunicado esperando classificação. 👍</div>'; return; }
+  el.innerHTML = lista.map((c, i) => {
+    const tipo = cc(c, ['Tipo']);
+    const local = [cc(c, ['Item', 'Local / Frente', 'Local']), cc(c, ['Setor'])].filter(Boolean).join(' · ');
+    const extra = [cc(c, ['Parte do corpo', 'Parte do Corpo']), cc(c, ['Lado']), cc(c, ['Status do atendimento', 'Tratamento', 'Atendimento'])].filter(Boolean).join(' · ');
+    const desc = descartados.get(String(cc(c, ['Código'])));
+    return `<article class="com-card" style="${desc ? 'opacity:.6;border-left-color:#C9D3CC' : ''}">
+      <div class="l1"><h4>${esc(cc(c, ['Código']))} · ${fmtData(String(cc(c, ['Data'])))}${cc(c, ['Hora']) ? ' ' + esc(cc(c, ['Hora'])) : ''}</h4>
+        <span class="tag ${norm(tipo) === 'ACIDENTE' ? 't-nok' : 't-pend'}">${esc(tipo || '—')}</span>
+        ${cc(c, ['Classificação']) ? `<span class="tag t-neutro">${esc(cc(c, ['Classificação']))}</span>` : ''}
+        <span style="font-size:13px;color:var(--muted)">${esc(unidadeSigla(cc(c, ['Unidade'])))}${cc(c, ['Turno']) ? ' · turno ' + esc(cc(c, ['Turno'])) : ''}</span></div>
+      <div class="meta">${esc(local)}${cc(c, ['Gerência', 'Gerencia']) ? ' · ' + esc(cc(c, ['Gerência', 'Gerencia'])) : ''}${extra ? ' · ' + esc(extra) : ''}</div>
+      <div class="rel">${esc(semTags(cc(c, ['Descrição', 'Descricao'])))}</div>
+      <div class="l2" style="margin-top:8px">
+        ${desc ? `<span class="tag t-neutro">Descartado: ${esc(desc.motivo)}${desc.descartado_por ? ' · ' + esc(desc.descartado_por) : ''}</span>
+          <button class="btn btn-sec" style="margin-left:auto" onclick="restaurarComunicado(${i})">Restaurar</button>`
+        : `<button class="btn btn-primario" onclick="classificarComunicado(${i})">Classificar</button>
+          ${norm(tipo) === 'INCIDENTE' ? `<button class="btn btn-sec" onclick="naoInvestigavel(${i})" title="Registra como ocorrência que não exige investigação">Não investigável</button>` : ''}
+          <button class="btn btn-link" style="color:var(--erro)" onclick="descartarComunicado(${i})">Descartar</button>`}
+      </div>
+    </article>`;
+  }).join('');
+  window._listaCom = lista;
+}
+function classificarComunicado(i) { const c = (window._listaCom || [])[i]; if (c) abrirOcorrencia(null, c); }
+// Incidente que não exige investigação: vira ocorrência direto, sem deflator
+async function naoInvestigavel(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código'])), un = unidadeSigla(cc(c, ['Unidade']));
+  const g = acharGerencia(cc(c, ['Gerência', 'Gerencia']), un);
+  if (!g) { toast('Não reconheci a gerência do local. Use Classificar e escolha a gerência.', true); return abrirOcorrencia(null, c); }
+  if (!confirm(`Registrar ${codigo} como incidente NÃO INVESTIGÁVEL?\n\nEle sai desta lista, fica nas Ocorrências e não entra no IP.`)) return;
+  const dados = { chave: 'COM|' + codigo, comunicado_codigo: codigo, data: String(cc(c, ['Data'])).slice(0, 10), unidade: un,
+    area: [cc(c, ['Item', 'Local / Frente', 'Local']), cc(c, ['Complemento do local'])].filter(Boolean).join(' — ') || null,
+    setor: cc(c, ['Setor', 'Supervisão']) || null, tipo_ocorrencia: 'Incidente', classificacao: 'NÃO INVESTIGÁVEL', deflator: false,
+    relato: semTags(cc(c, ['Descrição', 'Descricao'])) || null, gerencia_id: g.id, gerencia_origem: 'comunicado',
+    atualizado_por: quem().nome, atualizado_por_email: quem().email, atualizado_em: agoraISO() };
+  const { error } = await sb.from('acidentes').insert(dados);
+  if (error) { toast('Não salvou: ' + error.message, true); return; }
+  toast(codigo + ' registrado como não investigável'); carregar();
+}
+function descartarComunicado(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código']));
+  abrirModal(`
+    <h3>Descartar comunicado ${esc(codigo)}</h3>
+    <p class="desc">O comunicado some da lista e não vira ocorrência. A planilha do Google não é alterada, e dá para restaurar depois em "mostrar os descartados".</p>
+    <div class="campo"><label for="d-motivo">Motivo</label>
+      <select id="d-motivo"><option>Teste da plataforma</option><option>Comunicado duplicado</option><option>Não é acidente nem incidente</option><option>Outro</option></select></div>
+    <div class="campo" id="d-outro-wrap" style="display:none"><label for="d-outro">Descreva o motivo</label><input id="d-outro"></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="d-ok" style="background:var(--erro)">Descartar</button></div>`);
+  $('d-motivo').onchange = () => { $('d-outro-wrap').style.display = $('d-motivo').value === 'Outro' ? '' : 'none'; };
+  $('d-ok').onclick = async () => {
+    const motivo = $('d-motivo').value === 'Outro' ? $('d-outro').value.trim() : $('d-motivo').value;
+    if (!motivo) { $('m-erro').textContent = 'Descreva o motivo.'; return; }
+    const reg = { codigo, motivo, descartado_por: quem().nome };
+    const { error } = await sb.from('comunicados_descartados').upsert(reg, { onConflict: 'codigo' });
+    if (error) { $('m-erro').textContent = 'Não descartou: ' + error.message + (String(error.message).includes('comunicados_descartados') ? ' (rode o SQL comunicados_descartados.sql)' : ''); return; }
+    descartados.set(codigo, reg); fecharModal(); toast('Comunicado descartado'); atualizarBadge(); renderComunicados();
+  };
+}
+async function restaurarComunicado(i) {
+  const c = (window._listaCom || [])[i]; if (!c) return;
+  const codigo = String(cc(c, ['Código']));
+  if (!confirm('Restaurar o comunicado ' + codigo + ' para a lista de classificação?')) return;
+  const { error } = await sb.from('comunicados_descartados').delete().eq('codigo', codigo);
+  if (error) { toast('Não restaurou: ' + error.message, true); return; }
+  descartados.delete(codigo); toast('Comunicado restaurado'); atualizarBadge(); renderComunicados();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Importação: planilha de acidentes (SharePoint) + ATIVOS (gerência pela matrícula)
+// ─────────────────────────────────────────────────────────────
+function abrirImportacao() {
+  abrirModal(`
+    <h3>Importar planilha de acidentes</h3>
+    <p class="desc">Use a exportação da lista "Controle Acidente e Incidente". A gerência vem do ATIVOS pela matrícula. Ocorrências já importadas são atualizadas, sem perder a investigação nem a gerência escolhida à mão.</p>
+    <div class="arq"><label for="arq-ac">Planilha de acidentes</label><input type="file" id="arq-ac" accept=".xlsx,.xls,.csv"></div>
+    <div class="arq"><label for="arq-at">ATIVOS (opcional, recomendado)</label><input type="file" id="arq-at" accept=".xlsx,.xls,.csv"></div>
+    <div id="imp-previa"></div>
+    <div id="m-erro" class="erro-form"></div>
+    <div class="rodape"><button class="btn btn-sec" onclick="fecharModal()">Voltar</button><button class="btn btn-primario" id="imp-ler">Ler arquivos</button></div>`);
+  $('imp-ler').onclick = lerArquivos;
+}
+async function lerXlsx(f) {
+  const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array', cellDates: true });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+}
+const col = (l, nomes) => { for (const n of nomes) { const k = Object.keys(l).find(x => norm(x) === norm(n)); if (k !== undefined && l[k] !== null && l[k] !== '') return l[k]; } return null; };
+function dataISO(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);
+  const m = String(v || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const m2 = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? m2[0] : null;
+}
+const soDigitos = v => String(v ?? '').replace(/\D/g, '').replace(/^0+/, '');
+function acharGerencia(texto, unidade) {
+  if (!texto) return null;
+  const alvo = ALIASES_GERENCIA[norm(texto)] || texto;
+  const base = norm(alvo).replace(/\s*-\s*(JB|PB)$/, '').replace(/^GERENCIA\s+/, '');
+  const sufixo = (norm(alvo).match(/-\s*(JB|PB)$/) || [])[1] || norm(unidade);
+  const cands = gerencias.filter(g => norm(g.nome).replace(/\s*-\s*(JB|PB)$/, '').replace(/^GERENCIA\s+/, '') === base);
+  if (cands.length <= 1) return cands[0] || null;
+  const daUn = cands.filter(g => norm(g.unidades?.nome) === sufixo || norm(g.nome).endsWith('- ' + sufixo));
+  return daUn.length === 1 ? daUn[0] : null;
+}
+
+async function lerArquivos() {
+  const fa = $('arq-ac').files[0], ft = $('arq-at').files[0];
+  if (!fa) { $('m-erro').textContent = 'Escolha a planilha de acidentes.'; return; }
+  $('m-erro').textContent = ''; $('imp-previa').innerHTML = '<div class="carregando">Lendo...</div>';
+  try {
+    const linhas = await lerXlsx(fa);
+    const ativos = ft ? await lerXlsx(ft) : [];
+    const porMat = {};
+    ativos.forEach(l => { const m = soDigitos(col(l, ['MATRICULA', 'Matrícula', 'MATRÍCULA'])); const g = col(l, ['GERENCIA', 'GERÊNCIA']); if (m && g && !porMat[m]) porMat[m] = String(g).trim(); });
+
+    const novos = [], semGer = [], vistas = new Set();
+    let ignoradas = 0, repetidas = 0;
+    linhas.forEach(l => {
+      const data = dataISO(col(l, ['DATA']));
+      if (!data) { ignoradas++; return; }
+      const mat = soDigitos(col(l, ['MATRICULA', 'MATRÍCULA']));
+      const nome = (col(l, ['NOME COLABORADOR', 'NOME']) || '').toString().trim();
+      const chave = data + '|' + (mat || norm(nome));
+      if (vistas.has(chave)) { repetidas++; return; }
+      vistas.add(chave);
+      const unidade = (col(l, ['UNIDADE']) || '').toString().trim();
+      const gerTxt = mat ? porMat[mat] : null;
+      const g = acharGerencia(gerTxt, unidade);
+      const reg = {
+        chave, data, unidade, diretoria: col(l, ['DIRETORIA']), area: col(l, ['AREAS', 'ÁREAS', 'AREA']), setor: (col(l, ['SETOR']) || '').toString().trim() || null,
+        tipo_ocorrencia: col(l, ['TIPO DE OCORRÊNCIA']), classificacao: col(l, ['CLASSIFICAÇÃO OCORRÊNCIA', 'CLASSIFICACAO OCORRENCIA']),
+        relato: semTags(col(l, ['BREVE RELATO'])) || null, matricula: mat || null, nome: semTags(nome) || null, cargo: col(l, ['CARGO']),
+        tipo_colaborador: col(l, ['TIPO COLABORADOR']), deflator: norm(col(l, ['DEFLATOR'])) === 'SIM', status_planilha: col(l, ['INVESTIGAÇÃO', 'INVESTIGACAO']),
+        gerencia_ativos: gerTxt || null, _ger: g ? g.id : null
+      };
+      novos.push(reg);
+      if (reg.deflator && reg.data >= INICIO_CONTROLE && !g) semGer.push(reg);
+    });
+
+    const existentes = new Map(acidentes.map(a => [a.chave, a]));
+    const nNovos = novos.filter(n => !existentes.has(n.chave)).length;
+    const semGerReal = semGer.filter(n => { const e = existentes.get(n.chave); return !(e && e.gerencia_origem === 'manual' && e.gerencia_id); });
+    $('imp-previa').innerHTML = `<div class="regra">${novos.length} ocorrência(s) na planilha (${novos.filter(n => n.deflator).length} com deflator): <b>${nNovos} nova(s)</b> e ${novos.length - nNovos} já existente(s), que serão atualizadas.${ignoradas ? ` ${ignoradas} linha(s) sem data foram ignoradas.` : ''}${repetidas ? ` ${repetidas} linha(s) repetidas (mesma pessoa e data) foram ignoradas.` : ''}${!ft ? '<br>Sem o ATIVOS, a gerência das novas fica em branco para escolher na lista.' : ''}</div>` +
+      (semGerReal.length ? `<div class="aviso-box">${semGerReal.length} ocorrência(s) com deflator ficaram <b>sem gerência</b> (matrícula fora do ATIVOS ou gerência não reconhecida). Depois de importar, escolha a gerência na lista:<ul>${semGerReal.slice(0, 8).map(n => `<li>${fmtData(n.data)} · ${esc(n.nome || '')}${n.gerencia_ativos ? ' — ATIVOS: ' + esc(n.gerencia_ativos) : ''}</li>`).join('')}${semGerReal.length > 8 ? '<li>…</li>' : ''}</ul></div>` : '');
+    const btn = $('imp-ler'); btn.textContent = 'Gravar importação';
+    btn.onclick = () => gravarImportacao(novos, existentes);
+  } catch (e) {
+    console.error(e); $('imp-previa').innerHTML = ''; $('m-erro').textContent = 'Não consegui ler: ' + e.message;
+  }
+}
+async function gravarImportacao(novos, existentes) {
+  const btn = $('imp-ler'); btn.disabled = true; btn.textContent = 'Gravando...';
+  try {
+    const linhas = novos.map(n => {
+      const e = existentes.get(n.chave);
+      const { _ger, ...r } = n;
+      // Gerência escolhida à mão não é sobrescrita
+      if (e && e.gerencia_origem === 'manual') { r.gerencia_id = e.gerencia_id; r.gerencia_origem = 'manual'; }
+      else if (_ger) { r.gerencia_id = _ger; r.gerencia_origem = 'ativos'; }
+      else if (e) { r.gerencia_id = e.gerencia_id; r.gerencia_origem = e.gerencia_origem; }
+      else { r.gerencia_id = null; r.gerencia_origem = null; }
+      r.importado_em = agoraISO();
+      return r;
+    });
+    for (let i = 0; i < linhas.length; i += 200) {
+      const { error } = await sb.from('acidentes').upsert(linhas.slice(i, i + 200), { onConflict: 'chave' });
+      if (error) throw error;
+    }
+    fecharModal(); toast(`${linhas.length} ocorrência(s) importada(s)`); carregar();
+  } catch (e) {
+    console.error(e); btn.disabled = false; btn.textContent = 'Tentar de novo'; $('m-erro').textContent = 'Não gravou: ' + e.message;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Aba: visão da safra
+// ─────────────────────────────────────────────────────────────
+function renderSafra() {
+  const meses = mesesDaSafra(safraAtual());
+  const vis = visiveis().filter(contaNoIP);
+  const semGer = vis.filter(a => !a.gerencia_id).length;
+  const gids = [...new Set(vis.filter(a => a.gerencia_id).map(a => a.gerencia_id))].sort((a, b) => nomeGer(gerPorId(a)).localeCompare(nomeGer(gerPorId(b))));
+  if (!gids.length) { $('tabela-safra').innerHTML = '<div class="vazio">Nenhuma ocorrência com deflator e gerência definida nesta safra.</div>'; return; }
+  const linhas = gids.map(gid => `<tr><td>${esc(nomeGer(gerPorId(gid)))}</td>` + meses.map(m => {
+    const doMes = vis.filter(a => a.gerencia_id === gid && a.data.slice(0, 7) === m.ym);
+    if (!doMes.length) return '<td class="v-zero">—</td>';
+    const c = doMes.filter(comiteOk).length, p = doMes.filter(a => prazoInfo(a).ok).length, n = doMes.length;
+    return `<td><span class="${c >= n ? 'v-ok' : 'v-nok'}">${c}/${n}</span> <span class="${p >= n ? 'v-ok' : 'v-nok'}">${p}/${n}</span><span class="sub">comitê · prazo</span></td>`;
+  }).join('') + '</tr>').join('');
+  $('tabela-safra').innerHTML = (semGer ? `<div class="aviso-box" style="margin:10px">${semGer} ocorrência(s) com deflator sem gerência não entram no IP. Escolha a gerência na aba Ocorrências.</div>` : '') +
+    `<table><thead><tr><th>Gerência</th>${meses.map(m => `<th>${m.abr}/${String(m.ano).slice(2)}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table>`;
+}
+
+function abrirModal(html) {
+  $('modal-raiz').innerHTML = `<div class="fundo-modal" onclick="if(event.target===this)fecharModal()"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  const p = $('modal-raiz').querySelector('input,select,textarea'); if (p) p.focus();
+}
+function fecharModal() { $('modal-raiz').innerHTML = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+init();
+</script>
 </body>
 </html>
